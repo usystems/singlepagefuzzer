@@ -2,10 +2,6 @@
  * @author Lukas Gamper, lukas.gamper@usystems.ch
  * @copyright uSystems GmbH, www.usystems.ch
  */
-/**
- * fuzzer module. To run the fuzzer on a web app paste the following code into the console:
- (function(el){el.src='https://cdn.rawgit.com/usystems/snappyfuzzer/master/src/snappyfuzzer.js';el.onload=function(){SnappyFuzzer.start()};document.head.appendChild(el);})(document.createElement('script'));
-*/
 var SnappyFuzzer;
 (function (SnappyFuzzer) {
     /**
