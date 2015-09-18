@@ -4,8 +4,8 @@
  */
 /**
  * fuzzer module. To run the fuzzer on a web app paste the following code into the console:
- (function(el){el.src='http://example.com/snappyfuzzer.js';el.onload=Fuzzer.start();document.head.appendChild(el);})(document.createElement('script'));
- */
+ (function(el){el.src='https://cdn.rawgit.com/usystems/snappyfuzzer/master/src/snappyfuzzer.js';el.onload=function(){SnappyFuzzer.start()};document.head.appendChild(el);})(document.createElement('script'));
+*/
 var SnappyFuzzer;
 (function (SnappyFuzzer) {
     /**
