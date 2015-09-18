@@ -1,0 +1,2 @@
+# snappyfuzzer
+Fuzzer for webapps
