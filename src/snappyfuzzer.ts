@@ -95,6 +95,10 @@ module SnappyFuzzer {
 	class Context {
 		// active runner
 		public static runner:Runner = null;
+		// cache for the onbeforeunload function
+		public static onbeforeunload:(ev:BeforeUnloadEvent)=>string;
+		// cache for the onerror function
+		public static onerror:ErrorEventHandler;
 	}
 
 	/**
@@ -155,11 +159,36 @@ module SnappyFuzzer {
 				subtree: true
 			});
 
+			// set the onbeforunload function
+			Context.onbeforeunload = window.onbeforeunload;
+			window.onbeforeunload = ():string => {
+				return 'Are you sure you want to leave the page while the SnappyFuzzer is running?!';
+			};
+
+			// set the onerror function
+			Context.onerror = window.onerror;
+			window.onerror = (message:string, url:string, line:number, col:number, error:Error):boolean => {
+				console.error(message, url, line, col, error);
+
+				// call the original error handler
+				Context.onerror(message, url, line, col, error);
+
+				// do not prevent error default error handling
+				return false;
+			};
+
+			// start the fuzzer
 			this.startAction();
 		}
 
 		// stop and destory the runner
 		stop():void {
+
+			// reset the onbeforeunload function
+			window.onbeforeunload = Context.onbeforeunload;
+
+			// reset the onerror function
+			window.onerror = Context.onerror;
 
 			// stop the mutation observer
 			this.observer.disconnect();
@@ -173,6 +202,7 @@ module SnappyFuzzer {
 
 		// handle single dom mutations
 		private observe(mutation:MutationRecord):void {
+
 
 			// if an attribute with the prefix fuzzer has changed, its an internal attribute and it should be
 			// ignored
@@ -250,11 +280,11 @@ module SnappyFuzzer {
 				// track the style change
 				this.mutationState = MutationStates.HIGHLIGHT_SELECTED;
 
-				// call the highlighter
-				this.config.highlightSelected(this.activeElement['style']);
-
 				// if the style mutation does not trigger an mutation, go on after the timeout triggered
 				this.mutationTimeout = setTimeout(this.styleMutated.bind(this), 100);
+
+				// call the highlighter
+				this.config.highlightSelected(this.activeElement['style']);
 
 			} else
 				this.styleMutated();

@@ -97,10 +97,29 @@ var SnappyFuzzer;
                 characterData: true,
                 subtree: true
             });
+            // set the onbeforunload function
+            Context.onbeforeunload = window.onbeforeunload;
+            window.onbeforeunload = function () {
+                return 'Are you sure you want to leave the page while the SnappyFuzzer is running?!';
+            };
+            // set the onerror function
+            Context.onerror = window.onerror;
+            window.onerror = function (message, url, line, col, error) {
+                console.error(message, url, line, col, error);
+                // call the original error handler
+                Context.onerror(message, url, line, col, error);
+                // do not prevent error default error handling
+                return false;
+            };
+            // start the fuzzer
             this.startAction();
         }
         // stop and destory the runner
         Runner.prototype.stop = function () {
+            // reset the onbeforeunload function
+            window.onbeforeunload = Context.onbeforeunload;
+            // reset the onerror function
+            window.onerror = Context.onerror;
             // stop the mutation observer
             this.observer.disconnect();
             // make sure the runner stops
@@ -166,10 +185,10 @@ var SnappyFuzzer;
             else if (typeof this.config.highlightSelected == 'function') {
                 // track the style change
                 this.mutationState = MutationStates.HIGHLIGHT_SELECTED;
-                // call the highlighter
-                this.config.highlightSelected(this.activeElement['style']);
                 // if the style mutation does not trigger an mutation, go on after the timeout triggered
                 this.mutationTimeout = setTimeout(this.styleMutated.bind(this), 100);
+                // call the highlighter
+                this.config.highlightSelected(this.activeElement['style']);
             }
             else
                 this.styleMutated();
