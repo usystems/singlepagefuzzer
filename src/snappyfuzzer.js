@@ -12,11 +12,6 @@ var SnappyFuzzer;
             // run until stop is called
             this.stopAfter = 0;
         }
-        // hook to highlight the selected element
-        Config.prototype.highlightSelected = function (style) {
-            // by default a purple border is displayed
-            style.border = '3px solid #9C27B0';
-        };
         // hook to highlight the element an action is performed on
         Config.prototype.highlightAction = function (style, acceptance) {
             // if mutations have been triggerd, set the border treen
@@ -59,15 +54,6 @@ var SnappyFuzzer;
         return Context;
     })();
     /**
-     * Mutation states, what should be tracked
-     */
-    var MutationStates;
-    (function (MutationStates) {
-        MutationStates[MutationStates["HIGHLIGHT_SELECTED"] = 0] = "HIGHLIGHT_SELECTED";
-        MutationStates[MutationStates["HIGHLIGHT_ACTION"] = 1] = "HIGHLIGHT_ACTION";
-        MutationStates[MutationStates["OBSERVE"] = 2] = "OBSERVE";
-    })(MutationStates || (MutationStates = {}));
-    /**
      * Runner
      */
     var Runner = (function () {
@@ -75,8 +61,6 @@ var SnappyFuzzer;
         function Runner(config) {
             var _this = this;
             this.config = config;
-            // how to we want to handle the observed states
-            this.mutationState = MutationStates.OBSERVE;
             // timeout for the highlight mutations
             this.mutationTimeout = null;
             // minimal time used for actions with dom mutations
@@ -127,17 +111,31 @@ var SnappyFuzzer;
             // remove the runner from the context
             Context.runner = null;
         };
+        // generate a value with poission distribution, lambda = 1. The minimal value is 1 not 0 as normally
+        // https://en.wikipedia.org/wiki/Poisson_distribution
+        Runner.poission = function () {
+            // L = e^−λ
+            var L = 1. / Math.E;
+            var k = 0;
+            var p = 1;
+            while (p > L) {
+                ++k;
+                p *= Math.random();
+            }
+            // since we want at least one click, return 1 of the value would be zero
+            return Math.max(1, k - 1);
+        };
         // handle single dom mutations
         Runner.prototype.observe = function (mutation) {
             // if an attribute with the prefix fuzzer has changed, its an internal attribute and it should be
             // ignored
             if (mutation.type == 'attributes' && mutation.attributeName.substr(0, 7) == 'fuzzer-')
                 return;
-            else if (this.mutationState !== MutationStates.OBSERVE
+            else if (this.expectedStyleChange
                 && mutation.type == 'attributes'
                 && mutation.attributeName == 'style'
-                && mutation.target == this.activeElement)
-                return this.styleMutated();
+                && this.activeElements.some(function (el) { return el == mutation.target; }))
+                return this.startAction();
             // only register non hidden elements as dom mutations
             if (typeof mutation.target['offsetParent'] != 'undefined' && mutation.target['offsetParent'] !== null) {
                 this.hasDOMChanged = true;
@@ -154,135 +152,129 @@ var SnappyFuzzer;
                 }
             }
         };
-        // the highlight action on the style has been performed, now we can go on
-        Runner.prototype.styleMutated = function () {
-            // if function is called from a mutation clear the timout
-            if (this.mutationTimeout != null) {
-                clearTimeout(this.mutationTimeout);
-                this.mutationTimeout = null;
-            }
-            // set the observing mode back to observe and continue
-            switch (this.mutationState) {
-                case MutationStates.HIGHLIGHT_SELECTED:
-                    this.mutationState = MutationStates.OBSERVE;
-                    this.dispatchEvent();
-                    break;
-                case MutationStates.HIGHLIGHT_ACTION:
-                    this.mutationState = MutationStates.OBSERVE;
-                    this.startAction();
-                    break;
-            }
-        };
         Runner.prototype.startAction = function () {
-            var _this = this;
             // check if the runner is done
             if (this.stopTime !== null && this.stopTime < performance.now())
                 return this.stop();
-            // select an element from the viewport
-            if (!this.selectElement())
-                // use setTimeout to avoid huge stack traces
-                setTimeout(function () { return _this.startAction(); });
-            else if (typeof this.config.highlightSelected == 'function') {
-                // track the style change
-                this.mutationState = MutationStates.HIGHLIGHT_SELECTED;
-                // if the style mutation does not trigger an mutation, go on after the timeout triggered
-                this.mutationTimeout = setTimeout(this.styleMutated.bind(this), 100);
-                // call the highlighter
-                this.config.highlightSelected(this.activeElement['style']);
+            // reset the active elements array and the style changes
+            this.activeElements = [];
+            this.expectedStyleChange = false;
+            // as long as we dont have timing statistics, only select one node to get more statistics
+            var len = 1;
+            if (this.withoutActionLimit > 0)
+                // else add more elements with a poisson distribution
+                len = Runner.poission();
+            // find sutable elements
+            while (this.activeElements.length < len) {
+                // pick an element from the viewport
+                var el = this.selectElement();
+                // set the value for inputs
+                if (el.nodeName == 'INPUT')
+                    // since Element has no value field, use bracket access
+                    el['value'] = (Math.random() + 1).toString(36).substring(2);
+                {
+                    // create native click event
+                    // do randomly hold meta keys ...
+                    var event_1 = new MouseEvent('click', {
+                        view: window,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    // dispach event to picked element
+                    var start_1 = performance.now();
+                    el.dispatchEvent(event_1);
+                    this.dispatchTime = performance.now() - start_1;
+                }
+                // if the dispatch time is below the action limit, pick a new element
+                if (this.dispatchTime < this.withoutActionLimit)
+                    continue;
+                // we found a valid element
+                this.activeElements.push(el);
             }
-            else
-                this.styleMutated();
+            // reset the dom change tracker
+            this.hasDOMChanged = false;
+            // if there are no mutations, we go on after 1s
+            setTimeout(this.analyzeChanges.bind(this), 1000);
         };
         // select an element from the visible part of the webpage
         Runner.prototype.selectElement = function () {
-            // find a random element in viewport
-            var x = Math.floor(Math.random() * window.innerWidth);
-            var y = Math.floor(Math.random() * window.innerHeight);
-            this.activeElement = document.elementFromPoint(x, y);
-            // if you hit the scrollbar there is no element ...
-            if (this.activeElement === null)
-                return false;
-            // if the fuzzer acceptance is set, only accept elements with the acceptance probability
-            if (this.activeElement.getAttribute('fuzzer-acceptance') !== null) {
-                var acceptance = parseFloat(this.activeElement.getAttribute('fuzzer-acceptance'));
-                if (acceptance < Math.random())
-                    return false;
+            // pick points until a sutable element is found
+            while (true) {
+                // find a random element in viewport
+                var x = Math.floor(Math.random() * window.innerWidth);
+                var y = Math.floor(Math.random() * window.innerHeight);
+                var el = document.elementFromPoint(x, y);
+                // if you hit the scrollbar there is no element ...
+                if (el === null)
+                    continue;
+                // if the fuzzer acceptance is set, only accept elements with the acceptance probability
+                if (el.getAttribute('fuzzer-acceptance') !== null) {
+                    var acceptance = parseFloat(el.getAttribute('fuzzer-acceptance'));
+                    if (acceptance < Math.random())
+                        continue;
+                }
+                // if the selectFilter hook is valid check if the element passes the filter
+                if (typeof this.config.selectFilter == 'function' &&
+                    !this.config.selectFilter(x, y, el))
+                    continue;
+                // the element is valid
+                return el;
             }
-            // if the selectFilter hook is valid check if the element passes the filter
-            if (typeof this.config.selectFilter == 'function' &&
-                !this.config.selectFilter(x, y, this.activeElement))
-                return false;
-            // the element is valid
-            return true;
-        };
-        Runner.prototype.dispatchEvent = function () {
-            if (this.activeElement.nodeName == 'INPUT')
-                // since Element has no value field, use bracket access
-                this.activeElement['value'] = (Math.random() + 1).toString(36).substring(2);
-            {
-                // create native click event
-                var event_1 = new MouseEvent('click', {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true
-                });
-                // dispach event to picked element
-                var start_1 = performance.now();
-                this.activeElement.dispatchEvent(event_1);
-                var end = performance.now();
-                this.dispatchTime = end - start_1;
-            }
-            // if the dispatch time is below the action limit, only wait 10 ms instead of 1s
-            var wait = this.dispatchTime < this.withoutActionLimit ? 10 : 1000;
-            // reset the dom change tracker
-            this.hasDOMChanged = false;
-            // go on after mutation are over
-            setTimeout(this.analyzeChanges.bind(this), wait);
         };
         Runner.prototype.analyzeChanges = function () {
-            // acceptance rate of the selected element
-            var acceptance;
-            // do not reduce the acceptance of the input fields
-            if (this.hasDOMChanged || this.activeElement.nodeName == 'INPUT') {
-                // accept all selections
-                acceptance = 1;
-                // if the element has an acceptance reade remove it, since no attributes means acceptance of 1
-                if (this.activeElement.getAttribute('fuzzer-acceptance') !== null)
-                    this.activeElement.removeAttribute('fuzzer-acceptance');
-                // if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
-                if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime)
-                    this.minWithMutationTime = this.dispatchTime;
-                // tell the user where the fuzzer clicked on and set a green border
-                console.log('click on', [this.activeElement]);
+            // only change acceptance and color if only one element is selected, else we cannot map the mutations
+            // to the selected element
+            if (this.activeElements.length == 1) {
+                // acceptance rate of the selected element
+                var acceptance;
+                // do not reduce the acceptance of the input fields
+                if (this.hasDOMChanged || this.activeElements[0].nodeName == 'INPUT') {
+                    // accept all selections
+                    acceptance = 1;
+                    // if the element has an acceptance reade remove it, since no attributes means acceptance of 1
+                    if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null)
+                        this.activeElements[0].removeAttribute('fuzzer-acceptance');
+                    // if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
+                    if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime)
+                        this.minWithMutationTime = this.dispatchTime;
+                    // tell the user where the fuzzer clicked on and set a green border
+                    console.log('click on', this.activeElements);
+                }
+                else {
+                    // acceptance rate is equal to 2**(-#<actions without mutations>)
+                    if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null)
+                        acceptance = parseFloat(this.activeElements[0].getAttribute('fuzzer-acceptance')) / 2.;
+                    else
+                        acceptance = 0.5;
+                    // save the acceptance rate as an attribute directly in the Element
+                    this.activeElements[0].setAttribute('fuzzer-acceptance', acceptance.toFixed(4));
+                    // if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
+                    if (this.dispatchTime > this.maxWithoutMutationTime)
+                        this.maxWithoutMutationTime = this.dispatchTime;
+                }
+                // highlight the selected element
+                if (typeof this.config.highlightAction == 'function') {
+                    // track the style change
+                    this.expectedStyleChange = true;
+                    // call the highlighter
+                    this.config.highlightAction(this.activeElements[0]['style'], acceptance);
+                    // if the style mutation does not trigger an mutation, go on after the timeout triggered
+                    this.mutationTimeout = setTimeout(this.startAction.bind(this), 100);
+                }
+                else
+                    this.startAction();
+                // if the time limit for dispatch times without mutations has changed, update the limit
+                var limit = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
+                if (limit > this.withoutActionLimit) {
+                    console.log('update without action limit to ' + limit.toFixed(2) + ' ms');
+                    this.withoutActionLimit = limit;
+                }
             }
             else {
-                // acceptance rate is equal to 2**(-#<actions without mutations>)
-                if (this.activeElement.getAttribute('fuzzer-acceptance') !== null)
-                    acceptance = parseFloat(this.activeElement.getAttribute('fuzzer-acceptance')) / 2.;
-                else
-                    acceptance = 0.5;
-                // save the acceptance rate as an attribute directly in the Element
-                this.activeElement.setAttribute('fuzzer-acceptance', acceptance.toFixed(4));
-                // if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
-                if (this.dispatchTime > this.maxWithoutMutationTime)
-                    this.maxWithoutMutationTime = this.dispatchTime;
-            }
-            // highlight the selected element
-            if (typeof this.config.highlightAction == 'function') {
-                // track the style change
-                this.mutationState = MutationStates.HIGHLIGHT_ACTION;
-                // call the highlighter
-                this.config.highlightAction(this.activeElement['style'], acceptance);
-                // if the style mutation does not trigger an mutation, go on after the timeout triggered
-                this.mutationTimeout = setTimeout(this.styleMutated.bind(this), 100);
-            }
-            else
-                this.styleMutated();
-            // if the time limit for dispatch times without mutations has changed, update the limit
-            var limit = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
-            if (limit > this.withoutActionLimit) {
-                console.log('update without action limit to ' + limit.toFixed(2) + ' ms');
-                this.withoutActionLimit = limit;
+                // tell the user where the fuzzer clicked on and set a green border
+                console.log('click on', this.activeElements);
+                // start next action
+                this.startAction();
             }
         };
         return Runner;

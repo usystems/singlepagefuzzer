@@ -26,12 +26,6 @@ module SnappyFuzzer {
 		selectFilter?:(x:number, y:number, el:Element)=>boolean;
 
 		/**
-		 * Hook to highlight the selected element. By default a purple border is displayed
-		 * @param {CSSStyleDeclaration} style the style object of the selected element
-		 */
-		highlightSelected?:(style:CSSStyleDeclaration)=>void;
-
-		/**
 		 * Hook to highlight the element an action has been performed on (e.g a click). By default a if the action
 		 * triggered dom mutations, a green border is displyed. Else a red border is displayed, which gets thicker
 		 * the smaller the probability is
@@ -48,12 +42,6 @@ module SnappyFuzzer {
 
 		// run until stop is called
 		stopAfter:number = 0;
-
-		// hook to highlight the selected element
-		highlightSelected(style:CSSStyleDeclaration):void {
-			// by default a purple border is displayed
-			style.border = '3px solid #9C27B0';
-		}
 
 		// hook to highlight the element an action is performed on
 		highlightAction(style:CSSStyleDeclaration, acceptance:number) {
@@ -102,11 +90,6 @@ module SnappyFuzzer {
 	}
 
 	/**
-	 * Mutation states, what should be tracked
-	 */
-	enum MutationStates { HIGHLIGHT_SELECTED, HIGHLIGHT_ACTION, OBSERVE}
-
-	/**
 	 * Runner
 	 */
 	class Runner {
@@ -114,14 +97,14 @@ module SnappyFuzzer {
 		// DOM MutationObserver to track DOMChanges
 		private observer:MutationObserver;
 
-		// DOM Element wie currently working on
-		private activeElement:Element;
+		// DOM Elements we currently working on
+		private activeElements:Array<Element>;
 
 		// Time, when the runner has to stop in ms
 		private stopTime:number;
 
 		// how to we want to handle the observed states
-		private mutationState:MutationStates = MutationStates.OBSERVE;
+		private expectedStyleChange:boolean;
 
 		// timeout for the highlight mutations
 		private mutationTimeout:number = null;
@@ -200,24 +183,38 @@ module SnappyFuzzer {
 			Context.runner = null;
 		}
 
+		// generate a value with poission distribution, lambda = 1. The minimal value is 1 not 0 as normally
+		// https://en.wikipedia.org/wiki/Poisson_distribution
+		private static poission():number {
+			// L = e^−λ
+			let L = 1. / Math.E;
+			let k = 0;
+			let p = 1;
+
+			while (p > L) {
+				++k;
+				p *= Math.random();
+			}
+			// since we want at least one click, return 1 of the value would be zero
+			return Math.max(1, k - 1);
+		}
+
 		// handle single dom mutations
 		private observe(mutation:MutationRecord):void {
-
 
 			// if an attribute with the prefix fuzzer has changed, its an internal attribute and it should be
 			// ignored
 			if (mutation.type == 'attributes' && mutation.attributeName.substr(0, 7) == 'fuzzer-')
 				return;
 
-			// if a style mutation is expected and the the change is change of the style attribute of the active
-			// element, call the done callback
+			// if a style mutation is expected and the style the active element is mutated, we can start from scratch
 			else if (
-				   this.mutationState !== MutationStates.OBSERVE
+				   this.expectedStyleChange
 				&& mutation.type == 'attributes'
 				&& mutation.attributeName == 'style'
-				&& mutation.target == this.activeElement
+				&& this.activeElements.some((el):boolean=>el==mutation.target)
 			)
-				return this.styleMutated();
+				return this.startAction();
 
 			// only register non hidden elements as dom mutations
 			if (typeof mutation.target['offsetParent'] != 'undefined' && mutation.target['offsetParent'] !== null) {
@@ -240,175 +237,172 @@ module SnappyFuzzer {
 			}
 		}
 
-		// the highlight action on the style has been performed, now we can go on
-		styleMutated():void {
-
-			// if function is called from a mutation clear the timout
-			if (this.mutationTimeout != null) {
-				clearTimeout(this.mutationTimeout);
-				this.mutationTimeout = null
-			}
-
-			// set the observing mode back to observe and continue
-			switch (this.mutationState) {
-				case MutationStates.HIGHLIGHT_SELECTED:
-					this.mutationState = MutationStates.OBSERVE;
-					this.dispatchEvent();
-					break;
-				case MutationStates.HIGHLIGHT_ACTION:
-					this.mutationState = MutationStates.OBSERVE;
-					this.startAction();
-					break;
-			}
-		}
-
 		private startAction():void {
 
 			// check if the runner is done
 			if (this.stopTime !== null && this.stopTime < performance.now())
 				return this.stop();
 
-			// select an element from the viewport
-			if (!this.selectElement())
+			// reset the active elements array and the style changes
+			this.activeElements = [];
+			this.expectedStyleChange = false;
 
-				// use setTimeout to avoid huge stack traces
-				setTimeout(()=>this.startAction());
+			// as long as we dont have timing statistics, only select one node to get more statistics
+			let len:number = 1;
+			if (this.withoutActionLimit > 0)
 
-			// highlight the selected element
-			else if (typeof this.config.highlightSelected == 'function') {
+				// else add more elements with a poisson distribution
+				len = Runner.poission();
 
-				// track the style change
-				this.mutationState = MutationStates.HIGHLIGHT_SELECTED;
+			// find sutable elements
+			while (this.activeElements.length < len) {
 
-				// if the style mutation does not trigger an mutation, go on after the timeout triggered
-				this.mutationTimeout = setTimeout(this.styleMutated.bind(this), 100);
+				// pick an element from the viewport
+				let el:Element = this.selectElement();
 
-				// call the highlighter
-				this.config.highlightSelected(this.activeElement['style']);
+				// set the value for inputs
+				if (el.nodeName == 'INPUT')
+					// since Element has no value field, use bracket access
+					el['value'] = (Math.random() + 1).toString(36).substring(2);
 
-			} else
-				this.styleMutated();
-		}
+				{
+					// create native click event
+					// do randomly hold meta keys ...
+					let event:MouseEvent = new MouseEvent('click', {
+						view: window,
+						bubbles: true,
+						cancelable: true
+					});
 
-		// select an element from the visible part of the webpage
-		private selectElement():boolean {
+					// dispach event to picked element
+					let start = performance.now();
+					el.dispatchEvent(event);
+					this.dispatchTime = performance.now() - start;
 
-			// find a random element in viewport
-			let x:number = Math.floor(Math.random() * window.innerWidth);
-			let y:number = Math.floor(Math.random() * window.innerHeight);
-			this.activeElement = document.elementFromPoint(x, y);
+				}
 
-			// if you hit the scrollbar there is no element ...
-			if (this.activeElement === null)
-				return false;
+				// if the dispatch time is below the action limit, pick a new element
+				if (this.dispatchTime < this.withoutActionLimit)
+					continue;
 
-			// if the fuzzer acceptance is set, only accept elements with the acceptance probability
-			if (this.activeElement.getAttribute('fuzzer-acceptance') !== null) {
-				let acceptance:number = parseFloat(this.activeElement.getAttribute('fuzzer-acceptance'));
-				if (acceptance < Math.random())
-					return false;
+				// we found a valid element
+				this.activeElements.push(el);
+
 			}
-
-			// if the selectFilter hook is valid check if the element passes the filter
-			if (
-				typeof this.config.selectFilter == 'function' &&
-				!this.config.selectFilter(x, y, this.activeElement)
-			)
-				return false;
-
-			// the element is valid
-			return true;
-		}
-
-		private dispatchEvent():void {
-
-			if (this.activeElement.nodeName == 'INPUT')
-				// since Element has no value field, use bracket access
-				this.activeElement['value'] = (Math.random() + 1).toString(36).substring(2);
-
-			{
-				// create native click event
-				let event:MouseEvent = new MouseEvent('click', {
-					view: window,
-					bubbles: true,
-					cancelable: true
-				});
-
-				// dispach event to picked element
-				let start = performance.now();
-				this.activeElement.dispatchEvent(event);
-				let end = performance.now();
-				this.dispatchTime = end - start;
-			}
-
-			// if the dispatch time is below the action limit, only wait 10 ms instead of 1s
-			let wait:number = this.dispatchTime < this.withoutActionLimit ? 10 : 1000;
 
 			// reset the dom change tracker
 			this.hasDOMChanged = false;
 
-			// go on after mutation are over
-			setTimeout(this.analyzeChanges.bind(this), wait);
+			// if there are no mutations, we go on after 1s
+			setTimeout(this.analyzeChanges.bind(this), 1000);
+		}
+
+		// select an element from the visible part of the webpage
+		private selectElement():Element {
+
+			// pick points until a sutable element is found
+			while (true) {
+
+				// find a random element in viewport
+				let x:number = Math.floor(Math.random() * window.innerWidth);
+				let y:number = Math.floor(Math.random() * window.innerHeight);
+				let el:Element = document.elementFromPoint(x, y);
+
+				// if you hit the scrollbar there is no element ...
+				if (el === null)
+					continue;
+
+				// if the fuzzer acceptance is set, only accept elements with the acceptance probability
+				if (el.getAttribute('fuzzer-acceptance') !== null) {
+					let acceptance:number = parseFloat(el.getAttribute('fuzzer-acceptance'));
+					if (acceptance < Math.random())
+						continue;
+				}
+
+				// if the selectFilter hook is valid check if the element passes the filter
+				if (
+					typeof this.config.selectFilter == 'function' &&
+					!this.config.selectFilter(x, y, el)
+				)
+					continue;
+
+				// the element is valid
+				return el;
+			}
 		}
 
 		private analyzeChanges():void {
 
-			// acceptance rate of the selected element
-			let acceptance:number;
+			// only change acceptance and color if only one element is selected, else we cannot map the mutations
+			// to the selected element
+			if (this.activeElements.length == 1) {
 
-			// do not reduce the acceptance of the input fields
-			if (this.hasDOMChanged || this.activeElement.nodeName == 'INPUT') {
+				// acceptance rate of the selected element
+				let acceptance:number;
 
-				// accept all selections
-				acceptance = 1;
+				// do not reduce the acceptance of the input fields
+				if (this.hasDOMChanged || this.activeElements[0].nodeName == 'INPUT') {
 
-				// if the element has an acceptance reade remove it, since no attributes means acceptance of 1
-				if (this.activeElement.getAttribute('fuzzer-acceptance') !== null)
-					this.activeElement.removeAttribute('fuzzer-acceptance');
+					// accept all selections
+					acceptance = 1;
 
-				// if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
-				if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime)
-					this.minWithMutationTime = this.dispatchTime;
+					// if the element has an acceptance reade remove it, since no attributes means acceptance of 1
+					if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null)
+						this.activeElements[0].removeAttribute('fuzzer-acceptance');
 
-				// tell the user where the fuzzer clicked on and set a green border
-				console.log('click on', [this.activeElement]);
+					// if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
+					if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime)
+						this.minWithMutationTime = this.dispatchTime;
 
+					// tell the user where the fuzzer clicked on and set a green border
+					console.log('click on', this.activeElements);
+
+				} else {
+
+					// acceptance rate is equal to 2**(-#<actions without mutations>)
+					if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null)
+						acceptance = parseFloat(this.activeElements[0].getAttribute('fuzzer-acceptance')) / 2.;
+					else
+						acceptance = 0.5;
+
+					// save the acceptance rate as an attribute directly in the Element
+					this.activeElements[0].setAttribute('fuzzer-acceptance', acceptance.toFixed(4));
+
+					// if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
+					if (this.dispatchTime > this.maxWithoutMutationTime)
+						this.maxWithoutMutationTime = this.dispatchTime;
+				}
+
+				// highlight the selected element
+				if (typeof this.config.highlightAction == 'function') {
+
+					// track the style change
+					this.expectedStyleChange = true;
+
+					// call the highlighter
+					this.config.highlightAction(this.activeElements[0]['style'], acceptance);
+
+					// if the style mutation does not trigger an mutation, go on after the timeout triggered
+					this.mutationTimeout = setTimeout(this.startAction.bind(this), 100);
+
+				} else
+					this.startAction();
+
+				// if the time limit for dispatch times without mutations has changed, update the limit
+				let limit:number = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
+				if (limit > this.withoutActionLimit) {
+					console.log('update without action limit to ' + limit.toFixed(2) + ' ms');
+					this.withoutActionLimit = limit;
+				}
+
+			//
 			} else {
 
-				// acceptance rate is equal to 2**(-#<actions without mutations>)
-				if (this.activeElement.getAttribute('fuzzer-acceptance') !== null)
-					acceptance = parseFloat(this.activeElement.getAttribute('fuzzer-acceptance')) / 2.;
-				else
-					acceptance = 0.5;
+				// tell the user where the fuzzer clicked on and set a green border
+				console.log('click on', this.activeElements);
 
-				// save the acceptance rate as an attribute directly in the Element
-				this.activeElement.setAttribute('fuzzer-acceptance', acceptance.toFixed(4));
-
-				// if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
-				if (this.dispatchTime > this.maxWithoutMutationTime)
-					this.maxWithoutMutationTime = this.dispatchTime;
-			}
-
-			// highlight the selected element
-			if (typeof this.config.highlightAction == 'function') {
-
-				// track the style change
-				this.mutationState = MutationStates.HIGHLIGHT_ACTION;
-
-				// call the highlighter
-				this.config.highlightAction(this.activeElement['style'], acceptance);
-
-				// if the style mutation does not trigger an mutation, go on after the timeout triggered
-				this.mutationTimeout = setTimeout(this.styleMutated.bind(this), 100);
-
-			} else
-				this.styleMutated();
-
-			// if the time limit for dispatch times without mutations has changed, update the limit
-			let limit:number = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
-			if (limit > this.withoutActionLimit) {
-				console.log('update without action limit to ' + limit.toFixed(2) + ' ms');
-				this.withoutActionLimit = limit;
+				// start next action
+				this.startAction();
 			}
 		}
 	}
