@@ -290,6 +290,9 @@ module SnappyFuzzer {
 
 			}
 
+			// tell the user where the fuzzer performed an action
+			console.log('perform action on ', this.activeElements);
+
 			// reset the dom change tracker
 			this.hasDOMChanged = false;
 
@@ -354,9 +357,6 @@ module SnappyFuzzer {
 					if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime)
 						this.minWithMutationTime = this.dispatchTime;
 
-					// tell the user where the fuzzer clicked on and set a green border
-					console.log('click on', this.activeElements);
-
 				} else {
 
 					// acceptance rate is equal to 2**(-#<actions without mutations>)
@@ -397,9 +397,6 @@ module SnappyFuzzer {
 
 			//
 			} else {
-
-				// tell the user where the fuzzer clicked on and set a green border
-				console.log('click on', this.activeElements);
 
 				// start next action
 				this.startAction();

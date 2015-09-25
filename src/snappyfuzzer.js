@@ -191,6 +191,8 @@ var SnappyFuzzer;
                 // we found a valid element
                 this.activeElements.push(el);
             }
+            // tell the user where the fuzzer performed an action
+            console.log('perform action on ', this.activeElements);
             // reset the dom change tracker
             this.hasDOMChanged = false;
             // if there are no mutations, we go on after 1s
@@ -237,8 +239,6 @@ var SnappyFuzzer;
                     // if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
                     if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime)
                         this.minWithMutationTime = this.dispatchTime;
-                    // tell the user where the fuzzer clicked on and set a green border
-                    console.log('click on', this.activeElements);
                 }
                 else {
                     // acceptance rate is equal to 2**(-#<actions without mutations>)
@@ -271,8 +271,6 @@ var SnappyFuzzer;
                 }
             }
             else {
-                // tell the user where the fuzzer clicked on and set a green border
-                console.log('click on', this.activeElements);
                 // start next action
                 this.startAction();
             }
