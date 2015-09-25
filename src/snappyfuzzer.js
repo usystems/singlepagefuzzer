@@ -11,6 +11,7 @@ var SnappyFuzzer;
         function Config() {
             // run until stop is called
             this.stopAfter = 0;
+            this.preventUnload = false;
         }
         // hook to highlight the element an action is performed on
         Config.prototype.highlightAction = function (style, acceptance) {
@@ -70,7 +71,7 @@ var SnappyFuzzer;
             // time limit for dispaching an event to determin if a function has a javascript handler or not
             this.withoutActionLimit = 0;
             // Determine when to stop. If config.stopAfter == 0, run until stop is called
-            this.stopTime = config.stopAfter == 0 ? null : performance.now() + this.config.stopAfter * 1000;
+            this.startTime = performance.now();
             // initalize the mutation ovserver to observe all changes on the page
             this.observer = new MutationObserver(function (mutations) {
                 mutations.forEach(function (mutation) { return _this.observe(mutation); });
@@ -82,10 +83,12 @@ var SnappyFuzzer;
                 subtree: true
             });
             // set the onbeforunload function
-            Context.onbeforeunload = window.onbeforeunload;
-            window.onbeforeunload = function () {
-                return 'Are you sure you want to leave the page while the SnappyFuzzer is running?!';
-            };
+            if (config.preventUnload) {
+                Context.onbeforeunload = window.onbeforeunload;
+                window.onbeforeunload = function () {
+                    return 'Are you sure you want to leave the page while the SnappyFuzzer is running?!';
+                };
+            }
             // set the onerror function
             Context.onerror = window.onerror;
             window.onerror = function (message, url, line, col, error) {
@@ -101,21 +104,23 @@ var SnappyFuzzer;
         // stop and destory the runner
         Runner.prototype.stop = function () {
             // reset the onbeforeunload function
-            window.onbeforeunload = Context.onbeforeunload;
+            if (this.config.preventUnload)
+                window.onbeforeunload = Context.onbeforeunload;
             // reset the onerror function
             window.onerror = Context.onerror;
             // stop the mutation observer
             this.observer.disconnect();
             // make sure the runner stops
-            this.stopTime = performance.now() - 1;
+            this.config.stopAfter = -1;
             // remove the runner from the context
             Context.runner = null;
         };
         // generate a value with poission distribution, lambda = 1. The minimal value is 1 not 0 as normally
         // https://en.wikipedia.org/wiki/Poisson_distribution
-        Runner.poission = function () {
-            // L = e^−λ
-            var L = 1. / Math.E;
+        Runner.prototype.poission = function () {
+            // initalize distribution params
+            var lambda = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
+            var L = Math.exp(-lambda);
             var k = 0;
             var p = 1;
             while (p > L) {
@@ -153,8 +158,13 @@ var SnappyFuzzer;
             }
         };
         Runner.prototype.startAction = function () {
+            // if function is called from a mutation clear the timout
+            if (this.mutationTimeout != null) {
+                clearTimeout(this.mutationTimeout);
+                this.mutationTimeout = null;
+            }
             // check if the runner is done
-            if (this.stopTime !== null && this.stopTime < performance.now())
+            if (this.config.stopAfter != 0 && this.startTime + this.config.stopAfter * 1000 < performance.now())
                 return this.stop();
             // reset the active elements array and the style changes
             this.activeElements = [];
@@ -163,7 +173,7 @@ var SnappyFuzzer;
             var len = 1;
             if (this.withoutActionLimit > 0)
                 // else add more elements with a poisson distribution
-                len = Runner.poission();
+                len = this.poission();
             // find sutable elements
             while (this.activeElements.length < len) {
                 // pick an element from the viewport
