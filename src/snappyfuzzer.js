@@ -4,6 +4,7 @@
  */
 var SnappyFuzzer;
 (function (SnappyFuzzer) {
+    'use strict';
     /**
      * Default implementation of the config interface
      */
@@ -16,10 +17,12 @@ var SnappyFuzzer;
         // hook to highlight the element an action is performed on
         Config.prototype.highlightAction = function (style, acceptance) {
             // if mutations have been triggerd, set the border treen
-            if (acceptance == 1)
+            if (acceptance == 1) {
                 style.border = '1px solid #4CAF50';
-            else
+            }
+            else {
                 style.border = Math.round(Math.log(1. / acceptance) / Math.log(2)) + 'px solid #F44336';
+            }
         };
         return Config;
     })();
@@ -40,8 +43,9 @@ var SnappyFuzzer;
      * Stop the Fuzzer
      */
     function stop() {
-        if (Context.runner instanceof Runner)
+        if (Context.runner instanceof Runner) {
             Context.runner.stop();
+        }
     }
     SnappyFuzzer.stop = stop;
     /**
@@ -70,7 +74,7 @@ var SnappyFuzzer;
             this.maxWithoutMutationTime = 0;
             // time limit for dispaching an event to determin if a function has a javascript handler or not
             this.withoutActionLimit = 0;
-            // Determine when to stop. If config.stopAfter == 0, run until stop is called
+            // determine when to stop. If config.stopAfter == 0, run until stop is called
             this.startTime = performance.now();
             // initalize the mutation ovserver to observe all changes on the page
             this.observer = new MutationObserver(function (mutations) {
@@ -104,8 +108,9 @@ var SnappyFuzzer;
         // stop and destory the runner
         Runner.prototype.stop = function () {
             // reset the onbeforeunload function
-            if (this.config.preventUnload)
+            if (this.config.preventUnload) {
                 window.onbeforeunload = Context.onbeforeunload;
+            }
             // reset the onerror function
             window.onerror = Context.onerror;
             // stop the mutation observer
@@ -134,14 +139,17 @@ var SnappyFuzzer;
         Runner.prototype.observe = function (mutation) {
             // if an attribute with the prefix fuzzer has changed, its an internal attribute and it should be
             // ignored
-            if (mutation.type == 'attributes' && mutation.attributeName.substr(0, 7) == 'fuzzer-')
+            if (mutation.type == 'attributes' && mutation.attributeName.substr(0, 7) == 'fuzzer-') {
                 return;
-            else if (this.expectedStyleChange
-                && mutation.type == 'attributes'
-                && mutation.attributeName == 'style'
-                && this.activeElements.some(function (el) { return el == mutation.target; }))
+            }
+            else if (this.expectedStyleChange &&
+                mutation.type == 'attributes' &&
+                mutation.attributeName == 'style' &&
+                this.activeElements.some(function (el) { return el == mutation.target; })) {
                 return this.startAction();
+            }
             // only register non hidden elements as dom mutations
+            /* tslint:disable:no-string-literal */
             if (typeof mutation.target['offsetParent'] != 'undefined' && mutation.target['offsetParent'] !== null) {
                 this.hasDOMChanged = true;
                 // if new elements are introduced to the dom, check if these elements have a fuzzer acceptance
@@ -149,10 +157,11 @@ var SnappyFuzzer;
                 if (mutation.type == 'childList') {
                     var nodes = Array.prototype.concat(mutation.addedNodes, mutation.removedNodes);
                     nodes.forEach(function (node) {
-                        if (typeof node['querySelectorAll'] == 'function')
+                        if (typeof node['querySelectorAll'] == 'function') {
                             Array.prototype.forEach.call(node['querySelectorAll']('*[fuzzer-acceptance]'), function (child) {
                                 child.removeAttribute('fuzzer-acceptance');
                             });
+                        }
                     });
                 }
             }
@@ -164,24 +173,27 @@ var SnappyFuzzer;
                 this.mutationTimeout = null;
             }
             // check if the runner is done
-            if (this.config.stopAfter != 0 && this.startTime + this.config.stopAfter * 1000 < performance.now())
+            if (this.config.stopAfter != 0 && this.startTime + this.config.stopAfter * 1000 < performance.now()) {
                 return this.stop();
+            }
             // reset the active elements array and the style changes
             this.activeElements = [];
             this.expectedStyleChange = false;
             // as long as we dont have timing statistics, only select one node to get more statistics
             var len = 1;
-            if (this.withoutActionLimit > 0)
+            if (this.withoutActionLimit > 0) {
                 // else add more elements with a poisson distribution
                 len = this.poission();
+            }
             // find sutable elements
             while (this.activeElements.length < len) {
                 // pick an element from the viewport
                 var el = this.selectElement();
                 // set the value for inputs
-                if (el.nodeName == 'INPUT')
+                if (el.nodeName == 'INPUT') {
                     // since Element has no value field, use bracket access
                     el['value'] = (Math.random() + 1).toString(36).substring(2);
+                }
                 {
                     // create native click event
                     // do randomly hold meta keys ...
@@ -196,8 +208,9 @@ var SnappyFuzzer;
                     this.dispatchTime = performance.now() - start_1;
                 }
                 // if the dispatch time is below the action limit, pick a new element
-                if (this.dispatchTime < this.withoutActionLimit)
+                if (this.dispatchTime < this.withoutActionLimit) {
                     continue;
+                }
                 // we found a valid element
                 this.activeElements.push(el);
             }
@@ -217,18 +230,21 @@ var SnappyFuzzer;
                 var y = Math.floor(Math.random() * window.innerHeight);
                 var el = document.elementFromPoint(x, y);
                 // if you hit the scrollbar there is no element ...
-                if (el === null)
+                if (el === null) {
                     continue;
+                }
                 // if the fuzzer acceptance is set, only accept elements with the acceptance probability
                 if (el.getAttribute('fuzzer-acceptance') !== null) {
                     var acceptance = parseFloat(el.getAttribute('fuzzer-acceptance'));
-                    if (acceptance < Math.random())
+                    if (acceptance < Math.random()) {
                         continue;
+                    }
                 }
                 // if the selectFilter hook is valid check if the element passes the filter
                 if (typeof this.config.selectFilter == 'function' &&
-                    !this.config.selectFilter(x, y, el))
+                    !this.config.selectFilter(x, y, el)) {
                     continue;
+                }
                 // the element is valid
                 return el;
             }
@@ -244,23 +260,28 @@ var SnappyFuzzer;
                     // accept all selections
                     acceptance = 1;
                     // if the element has an acceptance reade remove it, since no attributes means acceptance of 1
-                    if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null)
+                    if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null) {
                         this.activeElements[0].removeAttribute('fuzzer-acceptance');
+                    }
                     // if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
-                    if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime)
+                    if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime) {
                         this.minWithMutationTime = this.dispatchTime;
+                    }
                 }
                 else {
                     // acceptance rate is equal to 2**(-#<actions without mutations>)
-                    if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null)
+                    if (this.activeElements[0].getAttribute('fuzzer-acceptance') !== null) {
                         acceptance = parseFloat(this.activeElements[0].getAttribute('fuzzer-acceptance')) / 2.;
-                    else
+                    }
+                    else {
                         acceptance = 0.5;
+                    }
                     // save the acceptance rate as an attribute directly in the Element
                     this.activeElements[0].setAttribute('fuzzer-acceptance', acceptance.toFixed(4));
                     // if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
-                    if (this.dispatchTime > this.maxWithoutMutationTime)
+                    if (this.dispatchTime > this.maxWithoutMutationTime) {
                         this.maxWithoutMutationTime = this.dispatchTime;
+                    }
                 }
                 // highlight the selected element
                 if (typeof this.config.highlightAction == 'function') {
@@ -271,8 +292,9 @@ var SnappyFuzzer;
                     // if the style mutation does not trigger an mutation, go on after the timeout triggered
                     this.mutationTimeout = setTimeout(this.startAction.bind(this), 100);
                 }
-                else
+                else {
                     this.startAction();
+                }
                 // if the time limit for dispatch times without mutations has changed, update the limit
                 var limit = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
                 if (limit > this.withoutActionLimit) {
