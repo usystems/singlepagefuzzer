@@ -78,7 +78,7 @@ var SnappyFuzzer;
             this.startTime = performance.now();
             // initalize the mutation ovserver to observe all changes on the page
             this.observer = new MutationObserver(function (mutations) {
-                mutations.forEach(function (mutation) { return _this.observe(mutation); });
+                mutations.forEach(function (mutation) { return _this.observeMutation(mutation); });
             });
             this.observer.observe(document.getElementsByTagName('body')[0], {
                 childList: true,
@@ -136,7 +136,7 @@ var SnappyFuzzer;
             return Math.max(1, k - 1);
         };
         // handle single dom mutations
-        Runner.prototype.observe = function (mutation) {
+        Runner.prototype.observeMutation = function (mutation) {
             // if an attribute with the prefix fuzzer has changed, its an internal attribute and it should be
             // ignored
             if (mutation.type == 'attributes' && mutation.attributeName.substr(0, 7) == 'fuzzer-') {
@@ -218,8 +218,19 @@ var SnappyFuzzer;
             console.log('perform action on ', this.activeElements);
             // reset the dom change tracker
             this.hasDOMChanged = false;
-            // if there are no mutations, we go on after 1s
-            setTimeout(this.analyzeChanges.bind(this), 1000);
+            // wait until all mutations are done
+            this.lastChange = performance.now();
+            setTimeout(this.allDone.bind(this), 20);
+        };
+        // check if the browser has finished the action
+        Runner.prototype.allDone = function () {
+            if (this.hasDOMChanged || performance.now() - this.lastChange < 25) {
+                this.analyzeChanges();
+            }
+            else {
+                this.lastChange = performance.now();
+                setTimeout(this.allDone.bind(this), 20);
+            }
         };
         // select an element from the visible part of the webpage
         Runner.prototype.selectElement = function () {

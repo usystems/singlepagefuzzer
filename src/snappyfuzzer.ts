@@ -139,8 +139,11 @@ namespace SnappyFuzzer {
 		// time limit for dispaching an event to determin if a function has a javascript handler or not
 		private withoutActionLimit: number = 0;
 
-		// tracks if the dom has changed triggerd by the event
+		// tracks if the dom has changed since the event was triggerd
 		private hasDOMChanged: boolean;
+
+		// time when the browser has triggered a timeout
+		private lastChange: number;
 
 		// create a runner and directly start picking element
 		constructor(private config: IConfig) {
@@ -150,7 +153,7 @@ namespace SnappyFuzzer {
 
 			// initalize the mutation ovserver to observe all changes on the page
 			this.observer = new MutationObserver((mutations: Array<MutationRecord>): void => {
-				mutations.forEach((mutation: MutationRecord): void => this.observe(mutation));
+				mutations.forEach((mutation: MutationRecord): void => this.observeMutation(mutation));
 			});
 			this.observer.observe(document.getElementsByTagName('body')[0], {
 				childList: true,
@@ -223,7 +226,7 @@ namespace SnappyFuzzer {
 		}
 
 		// handle single dom mutations
-		private observe(mutation: MutationRecord): void {
+		private observeMutation(mutation: MutationRecord): void {
 
 			// if an attribute with the prefix fuzzer has changed, its an internal attribute and it should be
 			// ignored
@@ -322,7 +325,6 @@ namespace SnappyFuzzer {
 
 				// we found a valid element
 				this.activeElements.push(el);
-
 			}
 
 			// tell the user where the fuzzer performed an action
@@ -331,8 +333,19 @@ namespace SnappyFuzzer {
 			// reset the dom change tracker
 			this.hasDOMChanged = false;
 
-			// if there are no mutations, we go on after 1s
-			setTimeout(this.analyzeChanges.bind(this), 1000);
+			// wait until all mutations are done
+			this.lastChange = performance.now();
+			setTimeout(this.allDone.bind(this), 20);
+		}
+
+		// check if the browser has finished the action
+		private allDone(): void {
+			if (this.hasDOMChanged || performance.now() - this.lastChange < 25) {
+				this.analyzeChanges();
+			} else {
+				this.lastChange = performance.now();
+				setTimeout(this.allDone.bind(this), 20);
+			}
 		}
 
 		// select an element from the visible part of the webpage
