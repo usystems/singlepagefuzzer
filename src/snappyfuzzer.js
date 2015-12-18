@@ -35,17 +35,40 @@ var SnappyFuzzer;
      * https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
      * @param {number} mean mean of the distribution
      * @param {number} std standard deviation of the distribution
-     * @return {number} normal distributed random number
+     * @param {boolean} positive if true, the result is always bigger than 0
+     * @return {number} random number drawn from a normal distributed
      */
-    function normal(mean, std) {
+    function normal(mean, std, positive) {
         if (mean === void 0) { mean = 0; }
         if (std === void 0) { std = 1; }
-        var u1 = Math.random();
-        var u2 = Math.random();
-        var n01 = Math.sqrt(-2. * Math.log(u1)) * Math.cos(2. * Math.PI * u2);
-        return n01 * std + mean;
+        if (positive === void 0) { positive = false; }
+        while (true) {
+            var u1 = Math.random();
+            var u2 = Math.random();
+            var n01 = Math.sqrt(-2. * Math.log(u1)) * Math.cos(2. * Math.PI * u2);
+            var n = n01 * std + mean;
+            if (!positive || n > 0) {
+                return n;
+            }
+        }
     }
     SnappyFuzzer.normal = normal;
+    /**
+     * Generate a random number from a poisson distribution https://en.wikipedia.org/wiki/Poisson_distribution
+     * @param {number} lambda lambda of the distribution
+     * @return {number} random number drawn from a poisson distribution
+     */
+    function poission(lambda) {
+        var L = Math.exp(-lambda);
+        var k = 0;
+        var p = 1;
+        while (p > L) {
+            ++k;
+            p *= Math.random();
+        }
+        return k - 1;
+    }
+    SnappyFuzzer.poission = poission;
     /**
      * Stop the Fuzzer
      */
@@ -79,6 +102,10 @@ var SnappyFuzzer;
             this.maxWithoutMutationTime = 0;
             // time limit for dispaching an event to determin if a function has a javascript handler or not
             this.withoutActionLimit = 0;
+            // should the snappy fuzzer simulate an offline situation
+            this.offline = false;
+            // the timeout handler for the on/offline change
+            this.lineTimeout = null;
             // determine when to stop. If config.stopAfter == 0, run until stop is called
             this.startTime = performance.now();
             // initalize the mutation ovserver to observe all changes on the page
@@ -120,6 +147,15 @@ var SnappyFuzzer;
                     sendProxy(this, args);
                 };
             }
+            // if an on/offline timer is set, initalize timeout
+            this.offline = false;
+            if (typeof this.config.offline == 'function') {
+                if (typeof this.config.online != 'function') {
+                    console.warn('there is an offline handler, but no online handler, so the fuzzer goes offline but' +
+                        'never online again.');
+                }
+                this.toggleLine();
+            }
             // set the onerror function
             Context.onerror = window.onerror;
             window.onerror = function (message, url, line, col, error) {
@@ -141,6 +177,10 @@ var SnappyFuzzer;
             if (this.config.patchXMLHttpRequestSend) {
                 XMLHttpRequest.prototype.send = this.origXMLHttpRequestSend;
             }
+            // clear the online / offline timeout
+            if (this.lineTimeout !== null) {
+                clearTimeout(this.lineTimeout);
+            }
             // reset the onerror function
             window.onerror = Context.onerror;
             // stop the mutation observer
@@ -149,21 +189,6 @@ var SnappyFuzzer;
             this.config.stopAfter = -1;
             // remove the runner from the context
             Context.runner = null;
-        };
-        // generate a value with poission distribution, lambda = 1. The minimal value is 1 not 0 as normally
-        // https://en.wikipedia.org/wiki/Poisson_distribution
-        Runner.prototype.poission = function () {
-            // initalize distribution params
-            var lambda = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
-            var L = Math.exp(-lambda);
-            var k = 0;
-            var p = 1;
-            while (p > L) {
-                ++k;
-                p *= Math.random();
-            }
-            // since we want at least one click, return 1 of the value would be zero
-            return Math.max(1, k - 1);
         };
         Runner.prototype.startAction = function () {
             // check if the runner is done
@@ -176,7 +201,8 @@ var SnappyFuzzer;
             var len = 1;
             if (this.withoutActionLimit > 0) {
                 // else add more elements with a poisson distribution
-                len = this.poission();
+                var lambda = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
+                len = Math.max(1, poission(lambda));
             }
             // find sutable elements
             while (this.activeElements.length < len) {
@@ -207,8 +233,6 @@ var SnappyFuzzer;
                 // we found a valid element
                 this.activeElements.push(el);
             }
-            // tell the user where the fuzzer performed an action
-            console.log(this.activeElements);
             // reset the dom change tracker
             this.hasDOMChanged = false;
             // wait until all mutations are done
@@ -239,7 +263,7 @@ var SnappyFuzzer;
                     // if the time limit for dispatch times without mutations has changed, update it
                     var limit = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
                     if (limit > this.withoutActionLimit) {
-                        console.log('update without action limit to ' + limit.toFixed(2) + ' ms');
+                        console.log("update without action limit to " + limit.toFixed(2) + " ms");
                         this.withoutActionLimit = limit;
                     }
                 }
@@ -272,15 +296,65 @@ var SnappyFuzzer;
                 return el;
             }
         };
+        // switch from online to offline state ...
+        Runner.prototype.toggleLine = function () {
+            var _this = this;
+            var fn = this.config[this.offline ? 'online' : 'offline'];
+            if (typeof fn == 'function') {
+                var duration = Math.round(fn());
+                this.lineTimeout = setTimeout(function () {
+                    _this.offline = !_this.offline;
+                    console.log("go " + (_this.offline ? 'offline' : 'online') + " after " + (duration / 1000.).toFixed(2) + " s");
+                    _this.toggleLine();
+                }, duration);
+            }
+            else {
+                this.lineTimeout = null;
+            }
+        };
         // proxy function for the xhr send function
         Runner.prototype.sendProxy = function (xhr, args) {
             var _this = this;
-            // introduce lag if callback is provided
-            if (typeof this.config.lag == 'function') {
-                setTimeout(function () { return _this.origXMLHttpRequestSend.apply(xhr, args); }, Math.max(0, this.config.lag(xhr, args)));
+            // if we are offline, every request fails ...
+            if (this.offline) {
+                // call the onerror handler, if the it exits, else call the onreadystatechange with xhr.status = 0
+                if (typeof xhr.onerror == 'function') {
+                    xhr.onerror(null);
+                }
+                else if (typeof xhr.onreadystatechange == 'function') {
+                    xhr.status = 0;
+                    for (var i = 0; i < 5; ++i) {
+                        xhr.readyState = i;
+                        xhr.onreadystatechange(null);
+                    }
+                }
+            }
+            else if (typeof this.config.dropRequest == 'function' && this.config.dropRequest(xhr, args)) {
+                console.log('drop request');
+                // if a timeout handler exits, call the timeout handler
+                if (xhr.timeout && typeof xhr.ontimeout == 'function') {
+                    setTimeout(xhr.ontimeout, xhr.timeout);
+                }
             }
             else {
-                return this.origXMLHttpRequestSend.apply(xhr, args);
+                // do we want to drop the response?
+                if (typeof this.config.dropResponse == 'function' && this.config.dropResponse(xhr, args)) {
+                    console.log('drop response');
+                    // if a timeout handler exits, call the timeout handler
+                    if (xhr.timeout && typeof xhr.ontimeout == 'function') {
+                        setTimeout(xhr.ontimeout, xhr.timeout);
+                    }
+                    // remove the response handlers to simulate a request loss
+                    xhr.onerror = null;
+                    xhr.onreadystatechange = null;
+                }
+                // sent the request
+                if (typeof this.config.lag == 'function') {
+                    setTimeout(function () { return _this.origXMLHttpRequestSend.apply(xhr, args); }, Math.max(0, this.config.lag(xhr, args)));
+                }
+                else {
+                    this.origXMLHttpRequestSend.apply(xhr, args);
+                }
             }
         };
         return Runner;

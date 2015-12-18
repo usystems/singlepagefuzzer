@@ -49,8 +49,37 @@ namespace SnappyFuzzer {
 		 * Introduce a lag for every xhr request
 		 * @param {XMLHttpRequest} xhr request object
 		 * @param {any[]} args arguments, passed to the send function
+		 * @return {number} miliseconds to wait befor the request is sent
 		 */
 		lag?: (xhr: XMLHttpRequest, args: Array<any>) => number;
+
+		/**
+		 * Deceides if the request should be dropped before sending
+		 * @param {XMLHttpRequest} xhr request object
+		 * @param {any[]} args arguments, passed to the send function
+		 * @return (boolean) if the request should be droped before sending
+		 */
+		dropRequest?: (xhr: XMLHttpRequest, args: Array<any>) => boolean;
+
+		/**
+		 * Deceides if the response from the server should be dropped
+		 * @param {XMLHttpRequest} xhr request object
+		 * @param {any[]} args arguments, passed to the send function
+		 * @return (boolean) if the resonse from the server should be droped
+		 */
+		dropResponse?: (xhr: XMLHttpRequest, args: Array<any>) => boolean;
+
+		/**
+		 * If the fuzzer goes offline, when should it go online again
+		 * @return (number) miliseconds to wait until it goes online
+		 */
+		online?: () => number;
+
+		/**
+		 * If the fuzzer goes online, when should it go offline again
+		 * @return (number) miliseconds to wait until it goes offline
+		 */
+		offline?: () => number;
 	}
 
 	/**
@@ -84,13 +113,35 @@ namespace SnappyFuzzer {
 	 * https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
 	 * @param {number} mean mean of the distribution
 	 * @param {number} std standard deviation of the distribution
-	 * @return {number} normal distributed random number
+	 * @param {boolean} positive if true, the result is always bigger than 0
+	 * @return {number} random number drawn from a normal distributed
 	 */
-	export function normal(mean: number = 0, std: number = 1): number {
-		let u1: number = Math.random();
-		let u2: number = Math.random();
-		let n01: number = Math.sqrt(-2. * Math.log(u1)) * Math.cos(2. * Math.PI * u2);
-		return n01 * std + mean;
+	export function normal(mean: number = 0, std: number = 1, positive: boolean = false): number {
+		while (true) {
+			let u1: number = Math.random();
+			let u2: number = Math.random();
+			let n01: number = Math.sqrt(-2. * Math.log(u1)) * Math.cos(2. * Math.PI * u2);
+			let n: number = n01 * std + mean;
+			if (!positive || n > 0) {
+				return n;
+			}
+		}
+	}
+
+	/**
+	 * Generate a random number from a poisson distribution https://en.wikipedia.org/wiki/Poisson_distribution
+	 * @param {number} lambda lambda of the distribution
+	 * @return {number} random number drawn from a poisson distribution
+	 */
+	export function poission(lambda: number): number {
+		let L: number = Math.exp(-lambda);
+		let k: number = 0;
+		let p: number = 1;
+		while (p > L) {
+			++k;
+			p *= Math.random();
+		}
+		return k - 1;
 	}
 
 	/**
@@ -150,6 +201,12 @@ namespace SnappyFuzzer {
 		// the original send method from the XMLHttpRequest object. Since it has many signatures, use any
 		private origXMLHttpRequestSend: any;
 
+		// should the snappy fuzzer simulate an offline situation
+		private offline: boolean = false;
+
+		// the timeout handler for the on/offline change
+		private lineTimeout: number = null;
+
 		// create a runner and directly start picking element
 		constructor(private config: IConfig) {
 
@@ -197,6 +254,16 @@ namespace SnappyFuzzer {
 				};
 			}
 
+			// if an on/offline timer is set, initalize timeout
+			this.offline = false;
+			if (typeof this.config.offline == 'function') {
+				if (typeof this.config.online != 'function') {
+					console.warn('there is an offline handler, but no online handler, so the fuzzer goes offline but' +
+						'never online again.');
+				}
+				this.toggleLine();
+			}
+
 			// set the onerror function
 			Context.onerror = window.onerror;
 			window.onerror = (message: string, url: string, line: number, col: number, error: Error): boolean => {
@@ -225,6 +292,11 @@ namespace SnappyFuzzer {
 				XMLHttpRequest.prototype.send = this.origXMLHttpRequestSend;
 			}
 
+			// clear the online / offline timeout
+			if (this.lineTimeout !== null) {
+				clearTimeout(this.lineTimeout);
+			}
+
 			// reset the onerror function
 			window.onerror = Context.onerror;
 
@@ -236,24 +308,6 @@ namespace SnappyFuzzer {
 
 			// remove the runner from the context
 			Context.runner = null;
-		}
-
-		// generate a value with poission distribution, lambda = 1. The minimal value is 1 not 0 as normally
-		// https://en.wikipedia.org/wiki/Poisson_distribution
-		private poission(): number {
-
-			// initalize distribution params
-			let lambda: number = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
-			let L: number = Math.exp(-lambda);
-			let k: number = 0;
-			let p: number = 1;
-
-			while (p > L) {
-				++k;
-				p *= Math.random();
-			}
-			// since we want at least one click, return 1 of the value would be zero
-			return Math.max(1, k - 1);
 		}
 
 		private startAction(): void {
@@ -271,7 +325,8 @@ namespace SnappyFuzzer {
 			if (this.withoutActionLimit > 0) {
 
 				// else add more elements with a poisson distribution
-				len = this.poission();
+				let lambda: number = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
+				len = Math.max(1, poission(lambda));
 			}
 
 			// find sutable elements
@@ -309,9 +364,6 @@ namespace SnappyFuzzer {
 				// we found a valid element
 				this.activeElements.push(el);
 			}
-
-			// tell the user where the fuzzer performed an action
-			console.log(this.activeElements);
 
 			// reset the dom change tracker
 			this.hasDOMChanged = false;
@@ -351,7 +403,7 @@ namespace SnappyFuzzer {
 					// if the time limit for dispatch times without mutations has changed, update it
 					let limit: number = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
 					if (limit > this.withoutActionLimit) {
-						console.log('update without action limit to ' + limit.toFixed(2) + ' ms');
+						console.log(`update without action limit to ${limit.toFixed(2)} ms`);
 						this.withoutActionLimit = limit;
 					}
 				}
@@ -394,17 +446,78 @@ namespace SnappyFuzzer {
 			}
 		}
 
+		// switch from online to offline state ...
+		private toggleLine(): void {
+			let fn: () => number = this.config[this.offline ? 'online' : 'offline'];
+			if (typeof fn == 'function') {
+				let duration: number = Math.round(fn());
+				this.lineTimeout = setTimeout(
+					(): void => {
+						this.offline = !this.offline;
+						console.log(`go ${this.offline ? 'offline' : 'online'} after ${(duration / 1000.).toFixed(2)} s`);
+						this.toggleLine();
+					},
+					duration
+				);
+			} else {
+				this.lineTimeout = null;
+			}
+		}
+
 		// proxy function for the xhr send function
 		private sendProxy(xhr: XMLHttpRequest, args: Array<any>): void {
 
+			// if we are offline, every request fails ...
+			if (this.offline) {
+
+				// call the onerror handler, if the it exits, else call the onreadystatechange with xhr.status = 0
+				if (typeof xhr.onerror == 'function') {
+					xhr.onerror(null);
+				} else if (typeof xhr.onreadystatechange == 'function') {
+					xhr.status = 0;
+					for (let i: number = 0; i < 5; ++i) {
+						xhr.readyState = i;
+						xhr.onreadystatechange(null);
+					}
+				}
+
+			// do we want to drop the request?
+			} else if (typeof this.config.dropRequest == 'function' && this.config.dropRequest(xhr, args)) {
+
+				console.log('drop request');
+
+				// if a timeout handler exits, call the timeout handler
+				if (xhr.timeout && typeof xhr.ontimeout == 'function') {
+					setTimeout(xhr.ontimeout, xhr.timeout);
+				}
+
 			// introduce lag if callback is provided
-			if (typeof this.config.lag == 'function') {
-				setTimeout(
-					(): void => this.origXMLHttpRequestSend.apply(xhr, args),
-					Math.max(0, this.config.lag(xhr, args))
-				);
 			} else {
-				return this.origXMLHttpRequestSend.apply(xhr, args);
+
+				// do we want to drop the response?
+				if (typeof this.config.dropResponse == 'function' && this.config.dropResponse(xhr, args)) {
+
+					console.log('drop response');
+
+					// if a timeout handler exits, call the timeout handler
+					if (xhr.timeout && typeof xhr.ontimeout == 'function') {
+						setTimeout(xhr.ontimeout, xhr.timeout);
+					}
+
+					// remove the response handlers to simulate a request loss
+					xhr.onerror = null;
+					xhr.onreadystatechange = null;
+				}
+
+				// sent the request
+				if (typeof this.config.lag == 'function') {
+					setTimeout(
+						(): void => this.origXMLHttpRequestSend.apply(xhr, args),
+						Math.max(0, this.config.lag(xhr, args))
+					);
+				} else {
+					this.origXMLHttpRequestSend.apply(xhr, args);
+				}
 			}
 		}
 	}
