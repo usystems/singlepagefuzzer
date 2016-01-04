@@ -507,14 +507,16 @@ namespace SnappyFuzzer {
 					// remove the response handlers to simulate a request loss
 					xhr.onerror = null;
 					xhr.onreadystatechange = null;
-				}
+
 
 				// sent the request
-				if (typeof this.config.lag == 'function') {
+				} else if (typeof this.config.lag == 'function') {
 					setTimeout(
 						(): void => this.origXMLHttpRequestSend.apply(xhr, args),
 						Math.max(0, this.config.lag(xhr, args))
 					);
+
+				// else use the original send request
 				} else {
 					this.origXMLHttpRequestSend.apply(xhr, args);
 				}

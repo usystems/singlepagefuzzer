@@ -348,8 +348,7 @@ var SnappyFuzzer;
                     xhr.onerror = null;
                     xhr.onreadystatechange = null;
                 }
-                // sent the request
-                if (typeof this.config.lag == 'function') {
+                else if (typeof this.config.lag == 'function') {
                     setTimeout(function () { return _this.origXMLHttpRequestSend.apply(xhr, args); }, Math.max(0, this.config.lag(xhr, args)));
                 }
                 else {
