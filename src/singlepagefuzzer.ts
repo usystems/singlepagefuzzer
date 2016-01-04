@@ -472,13 +472,15 @@ namespace SinglePageFuzzer {
 
 				// call the onerror handler, if the it exits, else call the onreadystatechange with xhr.status = 0
 				if (typeof xhr.onerror == 'function') {
-					xhr.onerror(null);
+					setTimeout(xhr.onerror.bind(xhr, null));
 				} else if (typeof xhr.onreadystatechange == 'function') {
-					xhr.status = 0;
-					for (let i: number = 0; i < 5; ++i) {
-						xhr.readyState = i;
-						xhr.onreadystatechange(null);
-					}
+					setTimeout((): void => {
+						xhr.status = 0;
+						for (let i: number = 0; i < 5; ++i) {
+							xhr.readyState = i;
+							xhr.onreadystatechange(null);
+						}
+					});
 				}
 
 			// do we want to drop the request?

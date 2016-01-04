@@ -319,14 +319,16 @@ var SinglePageFuzzer;
             if (this.offline) {
                 // call the onerror handler, if the it exits, else call the onreadystatechange with xhr.status = 0
                 if (typeof xhr.onerror == 'function') {
-                    xhr.onerror(null);
+                    setTimeout(xhr.onerror.bind(xhr, null));
                 }
                 else if (typeof xhr.onreadystatechange == 'function') {
-                    xhr.status = 0;
-                    for (var i = 0; i < 5; ++i) {
-                        xhr.readyState = i;
-                        xhr.onreadystatechange(null);
-                    }
+                    setTimeout(function () {
+                        xhr.status = 0;
+                        for (var i = 0; i < 5; ++i) {
+                            xhr.readyState = i;
+                            xhr.onreadystatechange(null);
+                        }
+                    });
                 }
             }
             else if (typeof this.config.dropRequest == 'function' && this.config.dropRequest(xhr, args)) {
