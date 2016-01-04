@@ -2,8 +2,8 @@
  * @author Lukas Gamper, lukas.gamper@usystems.ch
  * @copyright uSystems GmbH, www.usystems.ch
  */
-var SnappyFuzzer;
-(function (SnappyFuzzer) {
+var SinglePageFuzzer;
+(function (SinglePageFuzzer) {
     'use strict';
     /**
      * Default implementation of the config interface
@@ -17,7 +17,7 @@ var SnappyFuzzer;
         }
         return Config;
     })();
-    SnappyFuzzer.Config = Config;
+    SinglePageFuzzer.Config = Config;
     /**
      * Start the Fuzzer
      * @param {IConfig} config options for the fuzzer
@@ -29,7 +29,7 @@ var SnappyFuzzer;
         // create new runner
         Context.runner = new Runner(config);
     }
-    SnappyFuzzer.start = start;
+    SinglePageFuzzer.start = start;
     /**
      * Generate a random number from a normal distribution using the Box-Muller transformation
      * https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
@@ -52,7 +52,7 @@ var SnappyFuzzer;
             }
         }
     }
-    SnappyFuzzer.normal = normal;
+    SinglePageFuzzer.normal = normal;
     /**
      * Generate a random number from a poisson distribution https://en.wikipedia.org/wiki/Poisson_distribution
      * @param {number} lambda lambda of the distribution
@@ -68,7 +68,7 @@ var SnappyFuzzer;
         }
         return k - 1;
     }
-    SnappyFuzzer.poission = poission;
+    SinglePageFuzzer.poission = poission;
     /**
      * Stop the Fuzzer
      */
@@ -77,7 +77,7 @@ var SnappyFuzzer;
             Context.runner.stop();
         }
     }
-    SnappyFuzzer.stop = stop;
+    SinglePageFuzzer.stop = stop;
     /**
      * Class containing the state informations
      */
@@ -102,7 +102,7 @@ var SnappyFuzzer;
             this.maxWithoutMutationTime = 0;
             // time limit for dispaching an event to determin if a function has a javascript handler or not
             this.withoutActionLimit = 0;
-            // should the snappy fuzzer simulate an offline situation
+            // should the single page fuzzer simulate an offline situation
             this.offline = false;
             // the timeout handler for the on/offline change
             this.lineTimeout = null;
@@ -132,7 +132,7 @@ var SnappyFuzzer;
             if (config.preventUnload) {
                 Context.onbeforeunload = window.onbeforeunload;
                 window.onbeforeunload = function () {
-                    return 'Are you sure you want to leave the page while the SnappyFuzzer is running?!';
+                    return 'Are you sure you want to leave the page while the SinglePageFuzzer is running?!';
                 };
             }
             if (config.patchXMLHttpRequestSend) {
@@ -358,5 +358,5 @@ var SnappyFuzzer;
         };
         return Runner;
     })();
-})(SnappyFuzzer || (SnappyFuzzer = {}));
-//# sourceMappingURL=snappyfuzzer.js.map
+})(SinglePageFuzzer || (SinglePageFuzzer = {}));
+//# sourceMappingURL=singlepagefuzzer.js.map

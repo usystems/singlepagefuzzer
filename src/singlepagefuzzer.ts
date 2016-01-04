@@ -3,7 +3,7 @@
  * @copyright uSystems GmbH, www.usystems.ch
  */
 
-namespace SnappyFuzzer {
+namespace SinglePageFuzzer {
 
 	'use strict';
 
@@ -201,7 +201,7 @@ namespace SnappyFuzzer {
 		// the original send method from the XMLHttpRequest object. Since it has many signatures, use any
 		private origXMLHttpRequestSend: any;
 
-		// should the snappy fuzzer simulate an offline situation
+		// should the single page fuzzer simulate an offline situation
 		private offline: boolean = false;
 
 		// the timeout handler for the on/offline change
@@ -241,7 +241,7 @@ namespace SnappyFuzzer {
 			if (config.preventUnload) {
 				Context.onbeforeunload = window.onbeforeunload;
 				window.onbeforeunload = (): string => {
-					return 'Are you sure you want to leave the page while the SnappyFuzzer is running?!';
+					return 'Are you sure you want to leave the page while the SinglePageFuzzer is running?!';
 				};
 			}
 
