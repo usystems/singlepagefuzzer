@@ -28,6 +28,11 @@ namespace SinglePageFuzzer {
 		patchXMLHttpRequestSend: boolean;
 
 		/**
+		 * A list of charachters the fuzzer picks uniformly to generate input values
+		 */
+		allowedChars: string[];
+
+		/**
 		 * Hook to filter the selected element by the fuzzer. E.g if we want the fuzzer not to select elements
 		 * in the top 50 pixels of the screen pass the following function:
 		 * selectFilter: function(x, y, el) { return y > 50; };
@@ -51,7 +56,7 @@ namespace SinglePageFuzzer {
 		 * @param {any[]} args arguments, passed to the send function
 		 * @return {number} miliseconds to wait befor the request is sent
 		 */
-		lag?: (xhr: XMLHttpRequest, args: Array<any>) => number;
+		lag?: (xhr: XMLHttpRequest, args: any[]) => number;
 
 		/**
 		 * Deceides if the request should be dropped before sending
@@ -59,7 +64,7 @@ namespace SinglePageFuzzer {
 		 * @param {any[]} args arguments, passed to the send function
 		 * @return (boolean) if the request should be droped before sending
 		 */
-		dropRequest?: (xhr: XMLHttpRequest, args: Array<any>) => boolean;
+		dropRequest?: (xhr: XMLHttpRequest, args: any[]) => boolean;
 
 		/**
 		 * Deceides if the response from the server should be dropped
@@ -67,7 +72,7 @@ namespace SinglePageFuzzer {
 		 * @param {any[]} args arguments, passed to the send function
 		 * @return (boolean) if the resonse from the server should be droped
 		 */
-		dropResponse?: (xhr: XMLHttpRequest, args: Array<any>) => boolean;
+		dropResponse?: (xhr: XMLHttpRequest, args: any[]) => boolean;
 
 		/**
 		 * If the fuzzer goes offline, when should it go online again
@@ -80,6 +85,14 @@ namespace SinglePageFuzzer {
 		 * @return (number) miliseconds to wait until it goes offline
 		 */
 		offline?: () => number;
+
+		/**
+		 * Hook into the native even creation of the fuzzer. If this function is not provided, the fuzzer creates click,
+		 * dblckick and keyboard events with 60%, 20% and 20% probability. For keyboard events the following keys
+		 * are picked equally distributed: esc, tab, enter, space, delete, delete, up, left, right, down
+		 * @return (Event) event to apply to a random element
+		 */
+		createEvent?: () => Event;
 	}
 
 	/**
@@ -93,6 +106,13 @@ namespace SinglePageFuzzer {
 		public preventUnload: boolean = false;
 
 		public patchXMLHttpRequestSend: boolean = true;
+
+		public allowedChars: string[] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+			'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+			'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Y', 'ä', 'ö', 'ü,', 'Ä', 'Ö', 'Ü',
+			'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
+			'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
+			'?', ';', '{', '}', '$', ' ', '\t', '\n'];
 	}
 
 	/**
@@ -117,15 +137,17 @@ namespace SinglePageFuzzer {
 	 * @return {number} random number drawn from a normal distributed
 	 */
 	export function normal(mean: number = 0, std: number = 1, positive: boolean = false): number {
-		while (true) {
+		let n: number = null;
+		while (n === null) {
 			let u1: number = Math.random();
 			let u2: number = Math.random();
 			let n01: number = Math.sqrt(-2. * Math.log(u1)) * Math.cos(2. * Math.PI * u2);
-			let n: number = n01 * std + mean;
-			if (!positive || n > 0) {
-				return n;
+			n = n01 * std + mean;
+			if (positive && n <= 0) {
+				n = null;
 			}
 		}
+		return n;
 	}
 
 	/**
@@ -138,7 +160,7 @@ namespace SinglePageFuzzer {
 		let k: number = 0;
 		let p: number = 1;
 		while (p > L) {
-			++k;
+			k += 1;
 			p *= Math.random();
 		}
 		return k - 1;
@@ -174,7 +196,7 @@ namespace SinglePageFuzzer {
 		private observer: MutationObserver;
 
 		// dom Elements we currently working on
-		private activeElements: Array<Element>;
+		private activeElements: Element[];
 
 		// time, when the runner has to stop in ms
 		private startTime: number;
@@ -214,7 +236,7 @@ namespace SinglePageFuzzer {
 			this.startTime = performance.now();
 
 			// initalize the mutation ovserver to observe all changes on the page
-			this.observer = new MutationObserver((mutations: Array<MutationRecord>): void => {
+			this.observer = new MutationObserver((mutations: MutationRecord[]): void => {
 
 				// update the last change time
 				this.lastAction = performance.now();
@@ -248,8 +270,8 @@ namespace SinglePageFuzzer {
 			if (config.patchXMLHttpRequestSend) {
 				this.origXMLHttpRequestSend = XMLHttpRequest.prototype.send;
 				// use a wrapper function to keep the scope of the xhr object
-				let sendProxy: (xhr: XMLHttpRequest, args: Array<any>) => void = this.sendProxy.bind(this);
-				XMLHttpRequest.prototype.send = function(...args: Array<any>): void {
+				let sendProxy: (xhr: XMLHttpRequest, args: any[]) => void = this.sendProxy.bind(this);
+				XMLHttpRequest.prototype.send = function(...args: any[]): void {
 					sendProxy(this, args);
 				};
 			}
@@ -337,18 +359,51 @@ namespace SinglePageFuzzer {
 
 				// set the value for inputs
 				if (el.nodeName == 'INPUT') {
-					// since Element has no value field, use bracket access
-					el['value'] = (Math.random() + 1).toString(36).substring(2);
+
+					// empty the input value
+					el['value'] = '';
+
+					// generate a random number of chars, in average 16
+					for (let i: number = poission(16); i > 0; i -= 1) {
+						el['value'] += this.config.allowedChars[
+							Math.floor(Math.random() * this.config.allowedChars.length)
+						];
+					}
 				}
 
 				{
-					// create native click event
-					// do randomly hold meta keys ...
-					let event: MouseEvent = new MouseEvent('click', {
-						view: window,
-						bubbles: true,
-						cancelable: true
-					});
+					let event: Event;
+					if (typeof this.config.createEvent == 'function') {
+						event = this.config.createEvent();
+					} else {
+						let rng: number = Math.random();
+
+		 				// creat a click event with 60% probability and a dblclick event with 20% probability
+						if (rng < 0.8) {
+							event = document.createEvent('HTMLEvents');
+							event.initEvent(rng < 0.6 ? 'click' : 'dblclick', true, true);
+
+		 				// create a keyboard event with 20% probability
+						} else {
+							const keyCode: number = [
+								27, // esc
+								9, // tab
+								13, // enter
+								32, // space
+								8, // delete
+								46, // delete
+								38, // up
+								37, // left
+								39, // right
+								40 // down
+							][Math.floor(Math.random() * 10)];
+
+							event = document.createEvent('Events');
+							event.initEvent('keydown', true, true);
+							event['keyCode'] = keyCode;
+							event['which'] = keyCode;
+						}
+					}
 
 					// dispach event to picked element
 					let start: number = performance.now();
@@ -420,30 +475,31 @@ namespace SinglePageFuzzer {
 		// select an element from the visible part of the webpage
 		private selectElement(): Element {
 
+			// selected element to act on
+			let el: Element = null;
+
 			// pick points until a sutable element is found
-			while (true) {
+			while (el === null) {
 
 				// find a random element in viewport
 				let x: number = Math.floor(Math.random() * window.innerWidth);
 				let y: number = Math.floor(Math.random() * window.innerHeight);
-				let el: Element = document.elementFromPoint(x, y);
+				el = document.elementFromPoint(x, y);
 
-				// if you hit the scrollbar there is no element ...
-				if (el === null) {
-					continue;
-				}
-
-				// if the selectFilter hook is valid check if the element passes the filter
 				if (
-					typeof this.config.selectFilter == 'function' &&
-					!this.config.selectFilter(x, y, el)
+					// if you hit the scrollbar on OSX there is no element ...
+					el !== null && (
+						// if the selectFilter hook is valid check if the element passes the filter
+						typeof this.config.selectFilter != 'function' ||
+						!this.config.selectFilter(x, y, el)
+					)
 				) {
-					continue;
+					el = null;
 				}
-
-				// the element is valid
-				return el;
 			}
+
+			// the element is valid
+			return el;
 		}
 
 		// switch from online to offline state ...
@@ -451,6 +507,7 @@ namespace SinglePageFuzzer {
 			let fn: () => number = this.config[this.offline ? 'online' : 'offline'];
 			if (typeof fn == 'function') {
 				let duration: number = Math.round(fn());
+
 				this.lineTimeout = setTimeout(
 					(): void => {
 						this.offline = !this.offline;
@@ -465,7 +522,7 @@ namespace SinglePageFuzzer {
 		}
 
 		// proxy function for the xhr send function
-		private sendProxy(xhr: XMLHttpRequest, args: Array<any>): void {
+		private sendProxy(xhr: XMLHttpRequest, args: any[]): void {
 
 			// if we are offline, every request fails ...
 			if (this.offline) {
@@ -476,7 +533,7 @@ namespace SinglePageFuzzer {
 				} else if (typeof xhr.onreadystatechange == 'function') {
 					setTimeout((): void => {
 						xhr.status = 0;
-						for (let i: number = 0; i < 5; ++i) {
+						for (let i: number = 0; i < 5; i += 1) {
 							xhr.readyState = i;
 							xhr.onreadystatechange(null);
 						}
@@ -490,7 +547,10 @@ namespace SinglePageFuzzer {
 
 				// if a timeout handler exits, call the timeout handler
 				if (xhr.timeout && typeof xhr.ontimeout == 'function') {
-					setTimeout(xhr.ontimeout, xhr.timeout);
+					setTimeout(
+						(): void => xhr.ontimeout(null),
+						xhr.timeout
+					);
 				}
 
 			// introduce lag if callback is provided
@@ -503,7 +563,10 @@ namespace SinglePageFuzzer {
 
 					// if a timeout handler exits, call the timeout handler
 					if (xhr.timeout && typeof xhr.ontimeout == 'function') {
-						setTimeout(xhr.ontimeout, xhr.timeout);
+						setTimeout(
+							(): void => xhr.ontimeout(null),
+							xhr.timeout
+						);
 					}
 
 					// remove the response handlers to simulate a request loss

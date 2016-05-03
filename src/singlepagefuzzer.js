@@ -14,9 +14,15 @@ var SinglePageFuzzer;
             this.stopAfter = 0;
             this.preventUnload = false;
             this.patchXMLHttpRequestSend = true;
+            this.allowedChars = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+                'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+                'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Y', 'ä', 'ö', 'ü,', 'Ä', 'Ö', 'Ü',
+                'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
+                'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
+                '?', ';', '{', '}', '$', ' ', '\t', '\n'];
         }
         return Config;
-    })();
+    }());
     SinglePageFuzzer.Config = Config;
     /**
      * Start the Fuzzer
@@ -42,15 +48,17 @@ var SinglePageFuzzer;
         if (mean === void 0) { mean = 0; }
         if (std === void 0) { std = 1; }
         if (positive === void 0) { positive = false; }
-        while (true) {
+        var n = null;
+        while (n === null) {
             var u1 = Math.random();
             var u2 = Math.random();
             var n01 = Math.sqrt(-2. * Math.log(u1)) * Math.cos(2. * Math.PI * u2);
-            var n = n01 * std + mean;
-            if (!positive || n > 0) {
-                return n;
+            n = n01 * std + mean;
+            if (positive && n <= 0) {
+                n = null;
             }
         }
+        return n;
     }
     SinglePageFuzzer.normal = normal;
     /**
@@ -63,7 +71,7 @@ var SinglePageFuzzer;
         var k = 0;
         var p = 1;
         while (p > L) {
-            ++k;
+            k += 1;
             p *= Math.random();
         }
         return k - 1;
@@ -87,7 +95,7 @@ var SinglePageFuzzer;
         // active runner
         Context.runner = null;
         return Context;
-    })();
+    }());
     /**
      * Runner
      */
@@ -138,13 +146,13 @@ var SinglePageFuzzer;
             if (config.patchXMLHttpRequestSend) {
                 this.origXMLHttpRequestSend = XMLHttpRequest.prototype.send;
                 // use a wrapper function to keep the scope of the xhr object
-                var sendProxy = this.sendProxy.bind(this);
+                var sendProxy_1 = this.sendProxy.bind(this);
                 XMLHttpRequest.prototype.send = function () {
                     var args = [];
                     for (var _i = 0; _i < arguments.length; _i++) {
                         args[_i - 0] = arguments[_i];
                     }
-                    sendProxy(this, args);
+                    sendProxy_1(this, args);
                 };
             }
             // if an on/offline timer is set, initalize timeout
@@ -210,17 +218,44 @@ var SinglePageFuzzer;
                 var el = this.selectElement();
                 // set the value for inputs
                 if (el.nodeName == 'INPUT') {
-                    // since Element has no value field, use bracket access
-                    el['value'] = (Math.random() + 1).toString(36).substring(2);
+                    // empty the input value
+                    el['value'] = '';
+                    // generate a random number of chars, in average 16
+                    for (var i = poission(16); i > 0; i -= 1) {
+                        el['value'] += this.config.allowedChars[Math.floor(Math.random() * this.config.allowedChars.length)];
+                    }
                 }
                 {
-                    // create native click event
-                    // do randomly hold meta keys ...
-                    var event_1 = new MouseEvent('click', {
-                        view: window,
-                        bubbles: true,
-                        cancelable: true
-                    });
+                    var event_1 = void 0;
+                    if (typeof this.config.createEvent == 'function') {
+                        event_1 = this.config.createEvent();
+                    }
+                    else {
+                        var rng = Math.random();
+                        // creat a click event with 60% probability and a dblclick event with 20% probability
+                        if (rng < 0.8) {
+                            event_1 = document.createEvent('HTMLEvents');
+                            event_1.initEvent(rng < 0.6 ? 'click' : 'dblclick', true, true);
+                        }
+                        else {
+                            var keyCode = [
+                                27,
+                                9,
+                                13,
+                                32,
+                                8,
+                                46,
+                                38,
+                                37,
+                                39,
+                                40 // down
+                            ][Math.floor(Math.random() * 10)];
+                            event_1 = document.createEvent('Events');
+                            event_1.initEvent('keydown', true, true);
+                            event_1['keyCode'] = keyCode;
+                            event_1['which'] = keyCode;
+                        }
+                    }
                     // dispach event to picked element
                     var start_1 = performance.now();
                     el.dispatchEvent(event_1);
@@ -277,36 +312,37 @@ var SinglePageFuzzer;
         };
         // select an element from the visible part of the webpage
         Runner.prototype.selectElement = function () {
+            // selected element to act on
+            var el = null;
             // pick points until a sutable element is found
-            while (true) {
+            while (el === null) {
                 // find a random element in viewport
                 var x = Math.floor(Math.random() * window.innerWidth);
                 var y = Math.floor(Math.random() * window.innerHeight);
-                var el = document.elementFromPoint(x, y);
-                // if you hit the scrollbar there is no element ...
-                if (el === null) {
-                    continue;
-                }
+                el = document.elementFromPoint(x, y);
+                if (
+                // if you hit the scrollbar on OSX there is no element ...
+                el !== null && (
                 // if the selectFilter hook is valid check if the element passes the filter
-                if (typeof this.config.selectFilter == 'function' &&
-                    !this.config.selectFilter(x, y, el)) {
-                    continue;
+                typeof this.config.selectFilter != 'function' ||
+                    !this.config.selectFilter(x, y, el))) {
+                    el = null;
                 }
-                // the element is valid
-                return el;
             }
+            // the element is valid
+            return el;
         };
         // switch from online to offline state ...
         Runner.prototype.toggleLine = function () {
             var _this = this;
             var fn = this.config[this.offline ? 'online' : 'offline'];
             if (typeof fn == 'function') {
-                var duration = Math.round(fn());
+                var duration_1 = Math.round(fn());
                 this.lineTimeout = setTimeout(function () {
                     _this.offline = !_this.offline;
-                    console.log("go " + (_this.offline ? 'offline' : 'online') + " after " + (duration / 1000.).toFixed(2) + " s");
+                    console.log("go " + (_this.offline ? 'offline' : 'online') + " after " + (duration_1 / 1000.).toFixed(2) + " s");
                     _this.toggleLine();
-                }, duration);
+                }, duration_1);
             }
             else {
                 this.lineTimeout = null;
@@ -324,7 +360,7 @@ var SinglePageFuzzer;
                 else if (typeof xhr.onreadystatechange == 'function') {
                     setTimeout(function () {
                         xhr.status = 0;
-                        for (var i = 0; i < 5; ++i) {
+                        for (var i = 0; i < 5; i += 1) {
                             xhr.readyState = i;
                             xhr.onreadystatechange(null);
                         }
@@ -335,7 +371,7 @@ var SinglePageFuzzer;
                 console.log('drop request');
                 // if a timeout handler exits, call the timeout handler
                 if (xhr.timeout && typeof xhr.ontimeout == 'function') {
-                    setTimeout(xhr.ontimeout, xhr.timeout);
+                    setTimeout(function () { return xhr.ontimeout(null); }, xhr.timeout);
                 }
             }
             else {
@@ -344,7 +380,7 @@ var SinglePageFuzzer;
                     console.log('drop response');
                     // if a timeout handler exits, call the timeout handler
                     if (xhr.timeout && typeof xhr.ontimeout == 'function') {
-                        setTimeout(xhr.ontimeout, xhr.timeout);
+                        setTimeout(function () { return xhr.ontimeout(null); }, xhr.timeout);
                     }
                     // remove the response handlers to simulate a request loss
                     xhr.onerror = null;
@@ -359,6 +395,6 @@ var SinglePageFuzzer;
             }
         };
         return Runner;
-    })();
+    }());
 })(SinglePageFuzzer || (SinglePageFuzzer = {}));
 //# sourceMappingURL=singlepagefuzzer.js.map
