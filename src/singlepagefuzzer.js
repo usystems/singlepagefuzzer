@@ -66,7 +66,7 @@ var SinglePageFuzzer;
      * @param {number} lambda lambda of the distribution
      * @return {number} random number drawn from a poisson distribution
      */
-    function poission(lambda) {
+    function poisson(lambda) {
         var L = Math.exp(-lambda);
         var k = 0;
         var p = 1;
@@ -76,7 +76,7 @@ var SinglePageFuzzer;
         }
         return k - 1;
     }
-    SinglePageFuzzer.poission = poission;
+    SinglePageFuzzer.poisson = poisson;
     /**
      * Stop the Fuzzer
      */
@@ -210,7 +210,7 @@ var SinglePageFuzzer;
             if (this.withoutActionLimit > 0) {
                 // else add more elements with a poisson distribution
                 var lambda = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
-                len = Math.max(1, poission(lambda));
+                len = Math.max(1, poisson(lambda));
             }
             // find sutable elements
             while (this.activeElements.length < len) {
@@ -221,7 +221,7 @@ var SinglePageFuzzer;
                     // empty the input value
                     el['value'] = '';
                     // generate a random number of chars, in average 16
-                    for (var i = poission(16); i > 0; i -= 1) {
+                    for (var i = poisson(16); i > 0; i -= 1) {
                         el['value'] += this.config.allowedChars[Math.floor(Math.random() * this.config.allowedChars.length)];
                     }
                 }

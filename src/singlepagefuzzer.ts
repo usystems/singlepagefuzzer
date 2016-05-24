@@ -44,7 +44,7 @@ namespace SinglePageFuzzer {
 		selectFilter?: (x: number, y: number, el: Element) => boolean;
 
 		/**
-		 * Return the lambda for the poission distribution of the number of simulatanious events. Default: 1
+		 * Return the lambda for the poisson distribution of the number of simulatanious events. Default: 1
 		 * @param {number} start starttime of the runner
 		 * @return {number} lambda of the poisson distribution
 		 */
@@ -155,7 +155,7 @@ namespace SinglePageFuzzer {
 	 * @param {number} lambda lambda of the distribution
 	 * @return {number} random number drawn from a poisson distribution
 	 */
-	export function poission(lambda: number): number {
+	export function poisson(lambda: number): number {
 		let L: number = Math.exp(-lambda);
 		let k: number = 0;
 		let p: number = 1;
@@ -348,7 +348,7 @@ namespace SinglePageFuzzer {
 
 				// else add more elements with a poisson distribution
 				let lambda: number = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
-				len = Math.max(1, poission(lambda));
+				len = Math.max(1, poisson(lambda));
 			}
 
 			// find sutable elements
@@ -364,7 +364,7 @@ namespace SinglePageFuzzer {
 					el['value'] = '';
 
 					// generate a random number of chars, in average 16
-					for (let i: number = poission(16); i > 0; i -= 1) {
+					for (let i: number = poisson(16); i > 0; i -= 1) {
 						el['value'] += this.config.allowedChars[
 							Math.floor(Math.random() * this.config.allowedChars.length)
 						];
