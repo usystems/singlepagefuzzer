@@ -20,7 +20,7 @@ Open your single page webapp and paste the following code in the console of your
 
 ##What it does
 
-The Single Page Fuzzer clicks randomly on a single page webapp. By doing so, it uncovers bugs and security issues that you would never have found otherwise. Yet, some users may encounter the bugs and have a bad experience or a clever hacker uses it to cause problems.
+The Single Page Fuzzer performs random clicks on a single page webapp. By doing so, it uncovers bugs and security issues that you would never have found otherwise. Yet, some users may encounter the bugs and have a bad experience or a clever hacker uses it to cause problems.
 
 ##Why is it better
 
