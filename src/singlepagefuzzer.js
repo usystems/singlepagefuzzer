@@ -251,7 +251,7 @@ var SinglePageFuzzer;
                                 40 // down
                             ][Math.floor(Math.random() * 10)];
                             event_1 = document.createEvent('Events');
-                            event_1.initEvent('keydown', true, true);
+                            event_1.initEvent(rng < 0.8666 ? 'keydown' : (rng < 0.93333 ? 'keypress' : 'keyup'), true, true);
                             event_1['keyCode'] = keyCode;
                             event_1['which'] = keyCode;
                         }

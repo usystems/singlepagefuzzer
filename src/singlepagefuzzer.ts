@@ -399,7 +399,11 @@ namespace SinglePageFuzzer {
 							][Math.floor(Math.random() * 10)];
 
 							event = document.createEvent('Events');
-							event.initEvent('keydown', true, true);
+							event.initEvent(
+								rng < 0.8666 ? 'keydown' : ( rng < 0.93333 ? 'keypress' : 'keyup'),
+								true,
+								true
+							);
 							event['keyCode'] = keyCode;
 							event['which'] = keyCode;
 						}
