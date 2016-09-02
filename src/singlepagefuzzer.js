@@ -322,10 +322,10 @@ var SinglePageFuzzer;
                 el = document.elementFromPoint(x, y);
                 if (
                 // if you hit the scrollbar on OSX there is no element ...
-                el !== null && (
+                el !== null &&
                 // if the selectFilter hook is valid check if the element passes the filter
-                typeof this.config.selectFilter != 'function' ||
-                    !this.config.selectFilter(x, y, el))) {
+                typeof this.config.selectFilter != 'function' &&
+                !this.config.selectFilter(x, y, el)) {
                     el = null;
                 }
             }
