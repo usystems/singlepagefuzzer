@@ -239,21 +239,43 @@ var SinglePageFuzzer;
                         }
                         else {
                             var keyCode = [
-                                27,
+                                8,
                                 9,
                                 13,
+                                16,
+                                17,
+                                18,
+                                20,
+                                27,
                                 32,
-                                8,
-                                46,
-                                38,
+                                33,
+                                34,
+                                35,
+                                36,
                                 37,
+                                38,
                                 39,
-                                40 // down
+                                40,
+                                45,
+                                46,
+                                46,
+                                91,
+                                93,
+                                224 // meta
                             ][Math.floor(Math.random() * 10)];
+                            var eventType = rng < 0.8666 ? 'keydown' : (rng < 0.93333 ? 'keypress' : 'keyup');
+                            // no keypress / keydown for modifiers
+                            if ([16, 17, 18, 91].indexOf(keyCode) > -1) {
+                                eventType = 'keyup';
+                            }
                             event_1 = document.createEvent('Events');
-                            event_1.initEvent(rng < 0.8666 ? 'keydown' : (rng < 0.93333 ? 'keypress' : 'keyup'), true, true);
+                            event_1.initEvent(eventType, true, true);
                             event_1['keyCode'] = keyCode;
                             event_1['which'] = keyCode;
+                            event_1['shiftKey'] = false;
+                            event_1['metaKey'] = false;
+                            event_1['altKey'] = false;
+                            event_1['ctrlKey'] = false;
                         }
                     }
                     // dispach event to picked element
