@@ -32,7 +32,7 @@ covers the functionality of the webapp faster.
 
 And it is super simple to use, just past the code snippet above in the browser console and start fuzziing. 
 
-##Documentation
+##API
 
 ###Main Functions
 
@@ -40,11 +40,9 @@ And it is super simple to use, just past the code snippet above in the browser c
 
   This is the main function to start the fuzzer.
 
-  * **`config`**`: IConfig`
-    
+  * **`config`**`: IConfig`    
     Config object for the fuzzer (see below). The config object must implement the `SinglePageFuzzer.IConfig` interface. 
     If the config is not passed, an instance of `SinglePageFuzzer.SinglePageFuzzer.Config` is created.
-    
   * **`return`**: `void`
 
 * **`SinglePageFuzzer.stop`**`(): void`
@@ -53,110 +51,167 @@ And it is super simple to use, just past the code snippet above in the browser c
 
   * **`return`**: `void`
   
-* **`SinglePageFuzzer.IConfig`**
+###**`SinglePageFuzzer.IConfig`**
 
-  The Config Interface the argument of the start function must implement. This is only an Interface, so it cannot be
-  instanciated as an object.
-  
-  * **`stopAfter`**`: number`
-  
-    Number of seconds to stop if the fuzzer has not been stoped. If 0, the fuzzer will run until stop is called
+The Config Interface the argument of the start function must implement. This is only an Interface, so it cannot be
+instanciated as an object.
 
-  * **`preventUnload`**`: boolean`
+* **`stopAfter`**`: number`
+
+  Number of seconds to stop if the fuzzer has not been stoped. If 0, the fuzzer will run until stop is called
+
+* **`preventUnload`**`: boolean`
+
+  Should the fuzzer activate a onbeforunload hook?
+
+* **`patchXMLHttpRequestSend`**`: boolean`
+
+  Should the fuzzer patch the send method of the XMLHttpRequest object?
+
+* **`allowedChars`**`: string[]`
+
+  A list of charachters the fuzzer picks uniformly to generate input values
+
+* **`eventDistribution`**`: { probability: number; name: string; type: string }[]`
+
+  The distribution of the native even creation of the fuzzer. The probabilities must add up to `1`
+  If the event starts with `key` a keyCode is equally distributed picked from keyCodes
+  
+  e.g `{ probability: 0.5, name: 'click', type: 'HTMLEvents' }` means the fuzzer creates with a probability of
+  `0.5` a click event (which is of type HTMLEvents)
+
+* **`keyCodes`**`: number[]`
+
+  List of key codes to pick from if a key event is simulated
+
+* **`selectFilter?`**`(x: number, y: number, el: Element): boolean`
+
+  Optional hook to filter the selected element by the fuzzer. E.g if we want the fuzzer not to select elements
+  in the top 50 pixels of the screen pass the following function:  
+  `selectFilter: function(x, y, el) { return y > 50; };`
+
+  * **`x`**`: number` 
+    horrizontal position of the selected element
+  * **`y`**`: number` 
+    vertical position of the selected element
+  * **`el`**`: Element` 
+    selected element
+  * **`return`**`: boolean`
+    return if the element can be selected
+
+* **`lambda?`**`(start: number) => number`
     
-    Should the fuzzer activate a onbeforunload hook?
+    Optional, return the lambda for the poisson distribution of the number of simulatanious events. Default: `1`
+    
+    * **`start`**`: number`
+      starttime of the runner
+    * **`lambda`**`: number`
+      lambda of the poisson distribution
 
-  * **`patchXMLHttpRequestSend`**`: boolean`
+* **`lag`**`(xhr: XMLHttpRequest, args: any[]) => number`
 
-    Should the fuzzer patch the send method of the XMLHttpRequest object?
+  Optional, introduce a lag for every xhr request
+  * **`xhr`**`: XMLHttpRequest`
+    request object
+  * **`args`**`: any[]`
+    arguments, passed to the send function
+  * **`return`**`: number`
+    miliseconds to wait befor the request is sent
 
-  * **`allowedChars`**`: string[]`
+* **`dropRequest?`**`(xhr: XMLHttpRequest, args: any[]) => boolean`
 
-    A list of charachters the fuzzer picks uniformly to generate input values
+  Optinal, deceides if the request should be dropped before sending
+  * **`xhr`**`: XMLHttpRequest`
+    request object
+  * **`args`**`: any[]`
+    arguments, passed to the send function
+  * **`return`**`: boolean`
+    if the request should be droped before sending
 
-  * **`selectFilter?`**`(x: number, y: number, el: Element): boolean`
+* **`dropResponse?`**`(xhr: XMLHttpRequest, args: any[]) => boolean`
 
-    Optional hook to filter the selected element by the fuzzer. E.g if we want the fuzzer not to select elements
-    in the top 50 pixels of the screen pass the following function:
-	`selectFilter: function(x, y, el) { return y > 50; };`
-	
-	 * **`x`**`: number` 
-	   horrizontal position of the selected element
-	 * **`y`**`: number` 
-	   vertical position of the selected element
-	 * **`el`**`: Element` 
-	   selected element
-	 * **`return`**`: boolean`
-	     return if the element can be selected
+  Optional, Deceides if the response from the server should be dropped
+  * **`xgr`**`: XMLHttpRequest`
+    xhr request object
+  * **`args`**`: any[]`
+    arguments, passed to the send function
+  * **`return`**`: boolean`
+    if the resonse from the server should be droped
 
-	 * lambda?: (start: number) => number;
-		/**
-		 * Return the lambda for the poisson distribution of the number of simulatanious events. Default: 1
-		 * @param {number} start starttime of the runner
-		 * @return {number} lambda of the poisson distribution
-		 */
+* **`online?`**`() => number`
 
-	 * lag?: (xhr: XMLHttpRequest, args: any[]) => number;
-		/**
-		 * Introduce a lag for every xhr request
-		 * @param {XMLHttpRequest} xhr request object
-		 * @param {any[]} args arguments, passed to the send function
-		 * @return {number} miliseconds to wait befor the request is sent
-		 */
+  If the fuzzer goes offline, when should it go online again
+  * **`return`**`: number`
+    miliseconds to wait until the browser goes online
 
-	 * dropRequest?: (xhr: XMLHttpRequest, args: any[]) => boolean;
-		/**
-		 * Deceides if the request should be dropped before sending
-		 * @param {XMLHttpRequest} xhr request object
-		 * @param {any[]} args arguments, passed to the send function
-		 * @return (boolean) if the request should be droped before sending
-		 */
+* **`offline?`**`() => number`
 
-	 * dropResponse?: (xhr: XMLHttpRequest, args: any[]) => boolean;
-		/**
-		 * Deceides if the response from the server should be dropped
-		 * @param {XMLHttpRequest} xhr request object
-		 * @param {any[]} args arguments, passed to the send function
-		 * @return (boolean) if the resonse from the server should be droped
-		 */
+  If the fuzzer goes online, when should it go offline again
+  * **`return`**`: number`
+    miliseconds to wait until it goes offline
 
-	 * online?: () => number;
-		/**
-		 * If the fuzzer goes offline, when should it go online again
-		 * @return (number) miliseconds to wait until it goes online
-		 */
+###**`SinglePageFuzzer.Config`**
 
-	 * offline?: () => number;
-		/**
-		 * If the fuzzer goes online, when should it go offline again
-		 * @return (number) miliseconds to wait until it goes offline
-		 */
+Default implementation of the SinglePageFuzzer.IConfig interface
 
-	 * createEvent?: () => Event;
-		/**
-		 * Hook into the native even creation of the fuzzer. If this function is not provided, the fuzzer creates click,
-		 * dblckick and keyboard events with 60%, 20% and 20% probability. For keyboard events the following keys
-		 * are picked equally distributed: esc, tab, enter, space, delete, delete, up, left, right, down
-		 * @return (Event) event to apply to a random element
-		 */
+* **`stopAfter`**`: number = 0`
+run until stop is called
+* **`preventUnload`**`: boolean = false`
+do not activate the onUnload hook
+* **`patchXMLHttpRequestSend`**`: boolean = true`
+path the XHR Class to allow to simulate a slow or lossy connection
+* **`allowedChars`**`: string[] = `
+```javascript
+['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Y', 'ä', 'ö', 'ü,', 'Ä', 'Ö', 'Ü',
+'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
+'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
+'?', ';', '{', '}', '$', ' ', '\t', '\n']
+```
 
-* **`SinglePageFuzzer.Config`**
+* **`eventDistribution`**`: { probability: number; name: string; type: string }[] = `
+```javascript
+[
+	{ probability: 0.5, name: 'click', type: 'HTMLEvents' },
+	{ probability: 0.2, name: 'dblclick', type: 'HTMLEvents' },
+	{ probability: 0.1, name: 'submit', type: 'HTMLEvents' },
+	{ probability: 0.07, name: 'keydown', type: 'Events' },
+	{ probability: 0.06, name: 'keypress', type: 'Events' },
+	{ probability: 0.07, name: 'keyup', type: 'Events' }
+]
+```
 
-  Default implementation of the SinglePageFuzzer.IConfig interface
+* **`keyCodes`**`: number[] = ` 
+```javascript
+[
+	8, // backspace
+	9, // tab
+	13, // enter
+	16, // shift
+	17, // ctrl
+	18, // alt
+	20, // capslock
+	27, // esc
+	32, // space
+	33, // pageup
+	34, // pagedown
+	35, // end
+	36, // home
+	37, // left
+	38, // up
+	39, // right
+	40, // down
+	45, // ins
+	46, // del
+	46, // delete
+	91, // meta
+	93, // meta
+	224 // meta
+]
+```
 
-  * **`stopAfter`**`: number = 0`
-    run until stop is called
-  * **`preventUnload`**`: boolean = false`
-    do not activate the onUnload hook
-  * **`patchXMLHttpRequestSend`**`: boolean = true`
-    path the XHR Class to allow to simulate a slow or lossy connection
-  * **`allowedChars`**``: string[] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
-    'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-    'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Y', 'ä', 'ö', 'ü,', 'Ä', 'Ö', 'Ü',
-    'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
-    'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
-    '?', ';', '{', '}', '$', ' ', '\t', '\n']``
-
+###Helper Functions
 * **`SinglePageFuzzer.normal`**`(mean: number = 0, std: number = 1, positive: boolean = false): number`
 
   Generate a random number from a normal distribution using the Box-Muller transformation
