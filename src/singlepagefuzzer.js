@@ -20,6 +20,39 @@ var SinglePageFuzzer;
                 'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
                 'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
                 '?', ';', '{', '}', '$', ' ', '\t', '\n'];
+            this.eventDistribution = [
+                { probability: 0.5, name: 'click', type: 'HTMLEvents' },
+                { probability: 0.2, name: 'dblclick', type: 'HTMLEvents' },
+                { probability: 0.1, name: 'submit', type: 'HTMLEvents' },
+                { probability: 0.07, name: 'keydown', type: 'Events' },
+                { probability: 0.06, name: 'keypress', type: 'Events' },
+                { probability: 0.07, name: 'keyup', type: 'Events' }
+            ];
+            this.keyCodes = [
+                8,
+                9,
+                13,
+                16,
+                17,
+                18,
+                20,
+                27,
+                32,
+                33,
+                34,
+                35,
+                36,
+                37,
+                38,
+                39,
+                40,
+                45,
+                46,
+                46,
+                91,
+                93,
+                224 // meta
+            ];
         }
         return Config;
     }());
@@ -114,6 +147,8 @@ var SinglePageFuzzer;
             this.offline = false;
             // the timeout handler for the on/offline change
             this.lineTimeout = null;
+            // a cumulative version of the event distribution [probability, name, type]
+            this.cumulativeEventDistribution = [];
             // determine when to stop. If config.stopAfter == 0, run until stop is called
             this.startTime = performance.now();
             // initalize the mutation ovserver to observe all changes on the page
@@ -136,6 +171,21 @@ var SinglePageFuzzer;
                 characterData: true,
                 subtree: true
             });
+            var cumulativeProbability = 0;
+            this.cumulativeEventDistribution = config.eventDistribution
+                .map(function (value, index) {
+                cumulativeProbability += value.probability;
+                return [cumulativeProbability, value.name, value.type];
+            });
+            if (this.cumulativeEventDistribution.length == 0) {
+                console.error('config.eventDistribution must not be emtpy');
+                return;
+            }
+            else if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0] != 1) {
+                console.error('The event probabilities do not add up to 1, but to ' +
+                    this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0]);
+                return;
+            }
             // set the onbeforunload function
             if (config.preventUnload) {
                 Context.onbeforeunload = window.onbeforeunload;
@@ -226,57 +276,37 @@ var SinglePageFuzzer;
                     }
                 }
                 {
-                    var event_1 = void 0;
-                    if (typeof this.config.createEvent == 'function') {
-                        event_1 = this.config.createEvent();
+                    // pick the event
+                    var probability = 0;
+                    var eventName = null;
+                    var eventType = null;
+                    var keyCode = null;
+                    var rng = Math.random();
+                    for (var _i = 0, _a = this.cumulativeEventDistribution; _i < _a.length; _i++) {
+                        _b = _a[_i], probability = _b[0], eventName = _b[1], eventType = _b[2];
+                        if (rng < probability) {
+                            break;
+                        }
                     }
-                    else {
-                        var rng = Math.random();
-                        // creat a click event with 60% probability and a dblclick event with 20% probability
-                        if (rng < 0.8) {
-                            event_1 = document.createEvent('HTMLEvents');
-                            event_1.initEvent(rng < 0.6 ? 'click' : 'dblclick', true, true);
+                    // if the event is a keyboard event, add get keyCode
+                    if (eventName.substr(0, 3) == 'key') {
+                        keyCode = this.config.keyCodes[Math.floor(Math.random() * this.config.keyCodes.length)];
+                        // no keypress / keydown for modifiers
+                        if ([16, 17, 18, 91].indexOf(keyCode) > -1) {
+                            eventName = 'keyup';
                         }
-                        else {
-                            var keyCode = [
-                                8,
-                                9,
-                                13,
-                                16,
-                                17,
-                                18,
-                                20,
-                                27,
-                                32,
-                                33,
-                                34,
-                                35,
-                                36,
-                                37,
-                                38,
-                                39,
-                                40,
-                                45,
-                                46,
-                                46,
-                                91,
-                                93,
-                                224 // meta
-                            ][Math.floor(Math.random() * 10)];
-                            var eventType = rng < 0.8666 ? 'keydown' : (rng < 0.93333 ? 'keypress' : 'keyup');
-                            // no keypress / keydown for modifiers
-                            if ([16, 17, 18, 91].indexOf(keyCode) > -1) {
-                                eventType = 'keyup';
-                            }
-                            event_1 = document.createEvent('Events');
-                            event_1.initEvent(eventType, true, true);
-                            event_1['keyCode'] = keyCode;
-                            event_1['which'] = keyCode;
-                            event_1['shiftKey'] = false;
-                            event_1['metaKey'] = false;
-                            event_1['altKey'] = false;
-                            event_1['ctrlKey'] = false;
-                        }
+                    }
+                    // initalize the event
+                    var event_1 = document.createEvent(eventType);
+                    event_1.initEvent(eventName, true, true);
+                    // if the event is a keyboard event, set keycode
+                    if (eventName.substr(0, 3) == 'key') {
+                        event_1['keyCode'] = keyCode;
+                        event_1['which'] = keyCode;
+                        event_1['shiftKey'] = false;
+                        event_1['metaKey'] = false;
+                        event_1['altKey'] = false;
+                        event_1['ctrlKey'] = false;
                     }
                     // dispach event to picked element
                     var start_1 = performance.now();
@@ -295,6 +325,7 @@ var SinglePageFuzzer;
             // wait until all mutations are done
             this.lastAction = performance.now();
             setTimeout(this.allDone.bind(this), 20);
+            var _b;
         };
         // check if the browser has finished the action
         Runner.prototype.allDone = function () {

@@ -33,6 +33,19 @@ namespace SinglePageFuzzer {
 		allowedChars: string[];
 
 		/**
+		 * The distribution of the native even creation of the fuzzer.  The probabilities must add up to 1
+		 * e.g { probability: 0.5, name: 'click', type: 'HTMLEvents' } means the fuzzer creates with a probability of
+		 * 0.5 a click event (which is of type HTMLEvents)
+		 * If the event starts with 'key' a keyCode is equally distributed picked from keyCodes
+		 */
+		eventDistribution: { probability: number; name: string; type: string }[];
+
+		/**
+		 * List of key codes to pick from if a key event is simulated
+		 */
+		keyCodes: number[];
+
+		/**
 		 * Hook to filter the selected element by the fuzzer. E.g if we want the fuzzer not to select elements
 		 * in the top 50 pixels of the screen pass the following function:
 		 * selectFilter: function(x, y, el) { return y > 50; };
@@ -85,14 +98,6 @@ namespace SinglePageFuzzer {
 		 * @return (number) miliseconds to wait until it goes offline
 		 */
 		offline?: () => number;
-
-		/**
-		 * Hook into the native even creation of the fuzzer. If this function is not provided, the fuzzer creates click,
-		 * dblckick and keyboard events with 60%, 20% and 20% probability. For keyboard events the following keys
-		 * are picked equally distributed: esc, tab, enter, space, delete, delete, up, left, right, down
-		 * @return (Event) event to apply to a random element
-		 */
-		createEvent?: () => Event;
 	}
 
 	/**
@@ -113,6 +118,41 @@ namespace SinglePageFuzzer {
 			'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
 			'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
 			'?', ';', '{', '}', '$', ' ', '\t', '\n'];
+
+		public eventDistribution: { probability: number; name: string; type: string }[] = [
+			{ probability: 0.5, name: 'click', type: 'HTMLEvents' },
+			{ probability: 0.2, name: 'dblclick', type: 'HTMLEvents' },
+			{ probability: 0.1, name: 'submit', type: 'HTMLEvents' },
+			{ probability: 0.07, name: 'keydown', type: 'Events' },
+			{ probability: 0.06, name: 'keypress', type: 'Events' },
+			{ probability: 0.07, name: 'keyup', type: 'Events' }
+		];
+
+		public keyCodes: number[] = [
+			8, // backspace
+			9, // tab
+			13, // enter
+			16, // shift
+			17, // ctrl
+			18, // alt
+			20, // capslock
+			27, // esc
+			32, // space
+			33, // pageup
+			34, // pagedown
+			35, // end
+			36, // home
+			37, // left
+			38, // up
+			39, // right
+			40, // down
+			45, // ins
+			46, // del
+			46, // delete
+			91, // meta
+			93, // meta
+			224 // meta
+		];
 	}
 
 	/**
@@ -229,6 +269,9 @@ namespace SinglePageFuzzer {
 		// the timeout handler for the on/offline change
 		private lineTimeout: number = null;
 
+		// a cumulative version of the event distribution [probability, name, type]
+		private cumulativeEventDistribution: [number, string, string][] = [];
+
 		// create a runner and directly start picking element
 		constructor(private config: IConfig) {
 
@@ -258,6 +301,23 @@ namespace SinglePageFuzzer {
 				characterData: true,
 				subtree: true
 			});
+
+			let cumulativeProbability: number = 0;
+			this.cumulativeEventDistribution = config.eventDistribution
+				.map((value, index): [number, string, string] => {
+					cumulativeProbability += value.probability;
+					return [cumulativeProbability, value.name, value.type];
+				});
+			if (this.cumulativeEventDistribution.length == 0) {
+				console.error('config.eventDistribution must not be emtpy');
+				return;
+			} else  if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0] != 1) {
+				console.error(
+					'The event probabilities do not add up to 1, but to ' +
+					this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0]
+				);
+				return;
+			}
 
 			// set the onbeforunload function
 			if (config.preventUnload) {
@@ -372,61 +432,41 @@ namespace SinglePageFuzzer {
 				}
 
 				{
-					let event: Event;
-					if (typeof this.config.createEvent == 'function') {
-						event = this.config.createEvent();
-					} else {
-						let rng: number = Math.random();
+					// pick the event
+					let probability: number = 0;
+					let eventName: string = null;
+					let eventType: string = null;
+					let keyCode: number = null;
 
-		 				// creat a click event with 60% probability and a dblclick event with 20% probability
-						if (rng < 0.8) {
-							event = document.createEvent('HTMLEvents');
-							event.initEvent(rng < 0.6 ? 'click' : 'dblclick', true, true);
-
-		 				// create a keyboard event with 20% probability
-						} else {
-							const keyCode: number = [
-								8, // backspace
-								9, // tab
-								13, // enter
-								16, // shift
-						        17, // ctrl
-								18, // alt
-        						20, // capslock
-								27, // esc
-								32, // space
-								33, // pageup
-								34, // pagedown
-								35, // end
-								36, // home
-								37, // left
-								38, // up
-								39, // right
-								40, // down
-								45, // ins
-								46, // del
-								46, // delete
-								91, // meta
-								93, // meta
-								224 // meta
-							][Math.floor(Math.random() * 10)];
-
-							let eventType: string = rng < 0.8666 ? 'keydown' : ( rng < 0.93333 ? 'keypress' : 'keyup');
-
-							// no keypress / keydown for modifiers
-							if ([16 , 17, 18, 91].indexOf(keyCode) > -1) {
-								eventType = 'keyup';
-							}
-
-							event = document.createEvent('Events');
-							event.initEvent(eventType, true, true);
-							event['keyCode'] = keyCode;
-							event['which'] = keyCode;
-							event['shiftKey'] = false;
-							event['metaKey'] = false;
-							event['altKey'] = false;
-							event['ctrlKey'] = false;
+					const rng: number = Math.random();
+					for ([ probability, eventName, eventType ] of this.cumulativeEventDistribution) {
+						if (rng < probability) {
+							break;
 						}
+					}
+
+					// if the event is a keyboard event, add get keyCode
+					if (eventName.substr(0, 3) == 'key') {
+						keyCode = this.config.keyCodes[Math.floor(Math.random() * this.config.keyCodes.length)];
+
+						// no keypress / keydown for modifiers
+						if ([16 , 17, 18, 91].indexOf(keyCode) > -1) {
+							eventName = 'keyup';
+						}
+					}
+
+					// initalize the event
+					let event: Event = document.createEvent(eventType);
+					event.initEvent(eventName, true, true);
+
+					// if the event is a keyboard event, set keycode
+					if (eventName.substr(0, 3) == 'key') {
+						event['keyCode'] = keyCode;
+						event['which'] = keyCode;
+						event['shiftKey'] = false;
+						event['metaKey'] = false;
+						event['altKey'] = false;
+						event['ctrlKey'] = false;
 					}
 
 					// dispach event to picked element
