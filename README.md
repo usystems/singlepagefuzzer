@@ -214,8 +214,8 @@ path the XHR Class to allow to simulate a slow or lossy connection
 ###Helper Functions
 * **`SinglePageFuzzer.normal`**`(mean: number = 0, std: number = 1, positive: boolean = false): number`
 
-  Generate a random number from a normal distribution using the Box-Muller transformation
-  https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+  Generate a random number from a normal distribution using the 
+  [Box-Muller transformation](https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform)
 
   * **`mean`**`: number` 
     mean of the distribution
@@ -228,7 +228,7 @@ path the XHR Class to allow to simulate a slow or lossy connection
 
 * **`SinglePageFuzzer.poisson`**`(lambda: number): number`
 
-  Generate a random number from a poisson distribution https://en.wikipedia.org/wiki/Poisson_distribution
+  Generate a random number from a [poisson distribution](https://en.wikipedia.org/wiki/Poisson_distribution) 
   
   * **`lambda`**`: number` 
     lambda of the distribution
