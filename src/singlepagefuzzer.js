@@ -21,12 +21,11 @@ var SinglePageFuzzer;
                 'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
                 '?', ';', '{', '}', '$', ' ', '\t', '\n'];
             this.eventDistribution = [
-                { probability: 0.5, name: 'click', type: 'HTMLEvents' },
-                { probability: 0.2, name: 'dblclick', type: 'HTMLEvents' },
-                { probability: 0.1, name: 'submit', type: 'HTMLEvents' },
-                { probability: 0.07, name: 'keydown', type: 'Events' },
-                { probability: 0.06, name: 'keypress', type: 'Events' },
-                { probability: 0.07, name: 'keyup', type: 'Events' }
+                { probability: 0.5, events: 'click' },
+                // { probability: 0.1, events: ['mousemove', 'click']},
+                { probability: 0.2, events: 'dblclick' },
+                { probability: 0.1, events: 'submit' },
+                { probability: 0.2, events: ['keydown', 'keypress', 'keyup'] }
             ];
             this.keyCodes = [
                 8,
@@ -147,7 +146,7 @@ var SinglePageFuzzer;
             this.offline = false;
             // the timeout handler for the on/offline change
             this.lineTimeout = null;
-            // a cumulative version of the event distribution [probability, name, type]
+            // a cumulative version of the event distribution
             this.cumulativeEventDistribution = [];
             // determine when to stop. If config.stopAfter == 0, run until stop is called
             this.startTime = performance.now();
@@ -173,17 +172,28 @@ var SinglePageFuzzer;
             });
             var cumulativeProbability = 0;
             this.cumulativeEventDistribution = config.eventDistribution
-                .map(function (value, index) {
-                cumulativeProbability += value.probability;
-                return [cumulativeProbability, value.name, value.type];
+                .map(
+            // typescript is not able to handle string|string[] do convert it to void.
+            function (_a) {
+                var probability = _a.probability, events = _a.events;
+                if (!Array.isArray(events)) {
+                    events = [events];
+                }
+                events.forEach(function (event) {
+                    if (!Runner.eventTypes.hasOwnProperty(event)) {
+                        console.error('unknown event: ' + event);
+                    }
+                });
+                cumulativeProbability += probability;
+                return { probability: cumulativeProbability, events: events };
             });
             if (this.cumulativeEventDistribution.length == 0) {
                 console.error('config.eventDistribution must not be emtpy');
                 return;
             }
-            else if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0] != 1) {
+            else if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1].probability != 1) {
                 console.error('The event probabilities do not add up to 1, but to ' +
-                    this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0]);
+                    this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1].probability);
                 return;
             }
             // set the onbeforunload function
@@ -249,6 +259,7 @@ var SinglePageFuzzer;
             Context.runner = null;
         };
         Runner.prototype.startAction = function () {
+            var _this = this;
             // check if the runner is done
             if (this.config.stopAfter != 0 && this.startTime + this.config.stopAfter * 1000 < performance.now()) {
                 return this.stop();
@@ -263,72 +274,93 @@ var SinglePageFuzzer;
                 len = Math.max(1, poisson(lambda));
             }
             // find sutable elements
-            while (this.activeElements.length < len) {
+            var _loop_1 = function() {
                 // pick an element from the viewport
-                var el = this.selectElement();
+                var el = this_1.selectElement();
                 // set the value for inputs
                 if (el.nodeName == 'INPUT') {
                     // empty the input value
                     el['value'] = '';
                     // generate a random number of chars, in average 16
                     for (var i = poisson(16); i > 0; i -= 1) {
-                        el['value'] += this.config.allowedChars[Math.floor(Math.random() * this.config.allowedChars.length)];
+                        el['value'] += this_1.config.allowedChars[Math.floor(Math.random() * this_1.config.allowedChars.length)];
                     }
                 }
                 {
                     // pick the event
                     var probability = 0;
-                    var eventName = null;
-                    var eventType = null;
-                    var keyCode = null;
+                    var events = null;
                     var rng = Math.random();
-                    for (var _i = 0, _a = this.cumulativeEventDistribution; _i < _a.length; _i++) {
-                        _b = _a[_i], probability = _b[0], eventName = _b[1], eventType = _b[2];
+                    for (var _i = 0, _a = this_1.cumulativeEventDistribution; _i < _a.length; _i++) {
+                        _b = _a[_i], probability = _b.probability, events = _b.events;
                         if (rng < probability) {
                             break;
                         }
                     }
-                    // if the event is a keyboard event, add get keyCode
-                    if (eventName.substr(0, 3) == 'key') {
-                        keyCode = this.config.keyCodes[Math.floor(Math.random() * this.config.keyCodes.length)];
-                        // no keypress / keydown for modifiers
-                        if ([16, 17, 18, 91].indexOf(keyCode) > -1) {
-                            eventName = 'keyup';
-                        }
-                    }
-                    // initalize the event
-                    var event_1 = document.createEvent(eventType);
-                    event_1.initEvent(eventName, true, true);
-                    // if the event is a keyboard event, set keycode
-                    if (eventName.substr(0, 3) == 'key') {
-                        event_1['keyCode'] = keyCode;
-                        event_1['which'] = keyCode;
-                        event_1['shiftKey'] = false;
-                        event_1['metaKey'] = false;
-                        event_1['altKey'] = false;
-                        event_1['ctrlKey'] = false;
-                    }
-                    // dispach event to picked element
-                    var start_1 = performance.now();
-                    el.dispatchEvent(event_1);
-                    this.dispatchTime = performance.now() - start_1;
+                    // dispach events to picked element and use the longest event time as dispatch time
+                    this_1.dispatchTime = Math.max.apply(Math, events
+                        .map(function (event) { return _this.createEvent(event); })
+                        .map(function (event) {
+                        var start = performance.now();
+                        el.dispatchEvent(event);
+                        return performance.now() - start;
+                    }));
                 }
                 // if the dispatch time is below the action limit, pick a new element
-                if (this.dispatchTime < this.withoutActionLimit) {
-                    continue;
+                if (this_1.dispatchTime < this_1.withoutActionLimit) {
+                    return "continue";
                 }
                 // we found a valid element
-                this.activeElements.push(el);
+                this_1.activeElements.push(el);
+            };
+            var this_1 = this;
+            while (this.activeElements.length < len) {
+                var state_1 = _loop_1();
+                if (state_1 === "continue") continue;
             }
             // reset the dom change tracker
             this.hasDOMChanged = false;
             // wait until all mutations are done
             this.lastAction = performance.now();
-            setTimeout(this.allDone.bind(this), 20);
+            // if no timeout is passed from the user, use the native one
+            (typeof this.config.timeout === 'function'
+                ? this.config.timeout
+                : setTimeout)(function () { return _this.allDone(); }, 20);
             var _b;
+        };
+        Runner.prototype.createEvent = function (eventName) {
+            // since switch is scope free, declare the event variable here
+            var event;
+            switch (Runner.eventTypes[eventName]) {
+                case 'HTMLEvents':
+                    event = document.createEvent('HTMLEvents');
+                    event.initEvent(eventName, true, true);
+                    break;
+                case 'Events':
+                    var keyCode = this.config.keyCodes[Math.floor(Math.random() * this.config.keyCodes.length)];
+                    // no keypress / keydown for modifiers
+                    if ([16, 17, 18, 91].indexOf(keyCode) > -1) {
+                        eventName = 'keyup';
+                    }
+                    // initalize the event
+                    event = document.createEvent('Events');
+                    event.initEvent(eventName, true, true);
+                    // set keycode
+                    event['keyCode'] = keyCode;
+                    event['which'] = keyCode;
+                    event['shiftKey'] = false;
+                    event['metaKey'] = false;
+                    event['altKey'] = false;
+                    event['ctrlKey'] = false;
+                    break;
+                default:
+                    console.error('unknown event ty[e: ' + Runner.eventTypes[eventName]);
+            }
+            return event;
         };
         // check if the browser has finished the action
         Runner.prototype.allDone = function () {
+            var _this = this;
             var elapsed = performance.now() - this.lastAction;
             // if a dom mutation has occured, ore some backround javascript is running, wait for another 20 ms
             if (elapsed >= 20 && elapsed < 25) {
@@ -360,7 +392,10 @@ var SinglePageFuzzer;
             }
             else {
                 this.lastAction = performance.now();
-                setTimeout(this.allDone.bind(this), 20);
+                // if no timeout is passed from the user, use the native one
+                (typeof this.config.timeout === 'function'
+                    ? this.config.timeout
+                    : setTimeout)(function () { return _this.allDone(); }, 20);
             }
         };
         // select an element from the visible part of the webpage
@@ -446,6 +481,14 @@ var SinglePageFuzzer;
                     this.origXMLHttpRequestSend.apply(xhr, args);
                 }
             }
+        };
+        Runner.eventTypes = {
+            click: 'HTMLEvents',
+            dblclick: 'HTMLEvents',
+            submit: 'HTMLEvents',
+            keydown: 'Events',
+            keypress: 'Events',
+            keyup: 'Events'
         };
         return Runner;
     }());

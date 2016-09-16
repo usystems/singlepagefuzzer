@@ -33,17 +33,24 @@ namespace SinglePageFuzzer {
 		allowedChars: string[];
 
 		/**
-		 * The distribution of the native even creation of the fuzzer.  The probabilities must add up to 1
-		 * e.g { probability: 0.5, name: 'click', type: 'HTMLEvents' } means the fuzzer creates with a probability of
-		 * 0.5 a click event (which is of type HTMLEvents)
-		 * If the event starts with 'key' a keyCode is equally distributed picked from keyCodes
+		 * The distribution of the native even creation of the fuzzer. The probabilities must add up to 1
+		 * e.g { probability: 0.5, name: 'click' } means the fuzzer creates with a probability of 0.5 a click event
+		 * (which is of type HTMLEvents)
+		 * If the event is a keyboard event (one of keydown, keypress, keyup) a keyCode is picked equally distributed
+		 * from keyCodes
 		 */
-		eventDistribution: { probability: number; name: string; type: string }[];
+		eventDistribution: { probability: number; events: string|string[] }[];
 
 		/**
 		 * List of key codes to pick from if a key event is simulated
 		 */
 		keyCodes: number[];
+
+		/**
+		 * Hook to overwrite the timeout function to wait if an event happens. e.g if you are using angular, you can use
+		 * $timeout to make sure the fuzzer respect the digest cicle
+		 */
+		timeout?: (handler: () => void, timeout: number) => void;
 
 		/**
 		 * Hook to filter the selected element by the fuzzer. E.g if we want the fuzzer not to select elements
@@ -119,13 +126,13 @@ namespace SinglePageFuzzer {
 			'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
 			'?', ';', '{', '}', '$', ' ', '\t', '\n'];
 
-		public eventDistribution: { probability: number; name: string; type: string }[] = [
-			{ probability: 0.5, name: 'click', type: 'HTMLEvents' },
-			{ probability: 0.2, name: 'dblclick', type: 'HTMLEvents' },
-			{ probability: 0.1, name: 'submit', type: 'HTMLEvents' },
-			{ probability: 0.07, name: 'keydown', type: 'Events' },
-			{ probability: 0.06, name: 'keypress', type: 'Events' },
-			{ probability: 0.07, name: 'keyup', type: 'Events' }
+		public eventDistribution: { probability: number; events: string|string[] }[] = [
+			{ probability: 0.5, events: 'click'},
+			// { probability: 0.1, events: ['mousemove', 'click']},
+			{ probability: 0.2, events: 'dblclick'},
+			{ probability: 0.1, events: 'submit'},
+			{ probability: 0.2, events: ['keydown', 'keypress', 'keyup'] }
+			// , { probability: 0.1, events: ['mousedown', 'mouseup'] }
 		];
 
 		public keyCodes: number[] = [
@@ -232,6 +239,37 @@ namespace SinglePageFuzzer {
 	 */
 	class Runner {
 
+		private static eventTypes: { [name: string]: string } = {
+			click:  'HTMLEvents',
+			dblclick:  'HTMLEvents',
+			submit:  'HTMLEvents',
+			keydown:  'Events',
+			keypress:  'Events',
+			keyup:  'Events'
+			// TODO: implement these
+			// // use http://marcgrabanski.com/simulating-mouse-click-events-in-javascript/ to simulate mouse events
+			// mouseenter: 'MouseEvents',
+			// mouseover: 'MouseEvents',
+			// mousemove: 'MouseEvents',
+			// mousedown: 'MouseEvents',
+			// mouseup: 'MouseEvents',
+			// mouseleave: 'MouseEvents',
+			// mouseout: 'MouseEvents',
+			// // use http://stackoverflow.com/questions/18059860/manually-trigger-touch-event for touch events
+			// touchstart: 'TouchEvent',
+			// touchend: 'TouchEvent',
+			// touchmove: 'TouchEvent',
+			// touchcancel: 'TouchEvent',
+			// dragstart: 'DragEvent',
+			// drag: 'DragEvent',
+			// dragend: 'DragEvent',
+			// dragenter: 'DragEvent',
+			// dragover: 'DragEvent',
+			// dragleave: 'DragEvent',
+			// drop: 'DragEvent'
+
+		};
+
 		// dom MutationObserver to track DOMChanges
 		private observer: MutationObserver;
 
@@ -269,8 +307,8 @@ namespace SinglePageFuzzer {
 		// the timeout handler for the on/offline change
 		private lineTimeout: number = null;
 
-		// a cumulative version of the event distribution [probability, name, type]
-		private cumulativeEventDistribution: [number, string, string][] = [];
+		// a cumulative version of the event distribution
+		private cumulativeEventDistribution: { probability: number, events: string[] }[] = [];
 
 		// create a runner and directly start picking element
 		constructor(private config: IConfig) {
@@ -304,17 +342,28 @@ namespace SinglePageFuzzer {
 
 			let cumulativeProbability: number = 0;
 			this.cumulativeEventDistribution = config.eventDistribution
-				.map((value, index): [number, string, string] => {
-					cumulativeProbability += value.probability;
-					return [cumulativeProbability, value.name, value.type];
+				.map(
+					// typescript is not able to handle string|string[] do convert it to void.
+					({ probability, events }: {probability: number, events: any}
+				): { probability: number, events: string[] } => {
+					if (!Array.isArray(events)) {
+						events = [events];
+					}
+					events.forEach((event: string) => {
+						if (!Runner.eventTypes.hasOwnProperty(event)) {
+							console.error('unknown event: ' + event);
+						}
+					});
+					cumulativeProbability += probability;
+					return { probability: cumulativeProbability, events: events };
 				});
 			if (this.cumulativeEventDistribution.length == 0) {
 				console.error('config.eventDistribution must not be emtpy');
 				return;
-			} else  if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0] != 1) {
+			} else  if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1].probability != 1) {
 				console.error(
 					'The event probabilities do not add up to 1, but to ' +
-					this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1][0]
+					this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1].probability
 				);
 				return;
 			}
@@ -434,45 +483,26 @@ namespace SinglePageFuzzer {
 				{
 					// pick the event
 					let probability: number = 0;
-					let eventName: string = null;
-					let eventType: string = null;
-					let keyCode: number = null;
+					let events: string[] = null;
 
 					const rng: number = Math.random();
-					for ([ probability, eventName, eventType ] of this.cumulativeEventDistribution) {
+					for ({ probability, events } of this.cumulativeEventDistribution) {
 						if (rng < probability) {
 							break;
 						}
 					}
 
-					// if the event is a keyboard event, add get keyCode
-					if (eventName.substr(0, 3) == 'key') {
-						keyCode = this.config.keyCodes[Math.floor(Math.random() * this.config.keyCodes.length)];
-
-						// no keypress / keydown for modifiers
-						if ([16 , 17, 18, 91].indexOf(keyCode) > -1) {
-							eventName = 'keyup';
-						}
-					}
-
-					// initalize the event
-					let event: Event = document.createEvent(eventType);
-					event.initEvent(eventName, true, true);
-
-					// if the event is a keyboard event, set keycode
-					if (eventName.substr(0, 3) == 'key') {
-						event['keyCode'] = keyCode;
-						event['which'] = keyCode;
-						event['shiftKey'] = false;
-						event['metaKey'] = false;
-						event['altKey'] = false;
-						event['ctrlKey'] = false;
-					}
-
-					// dispach event to picked element
-					let start: number = performance.now();
-					el.dispatchEvent(event);
-					this.dispatchTime = performance.now() - start;
+					// dispach events to picked element and use the longest event time as dispatch time
+					this.dispatchTime = Math.max(...events
+						// map to native event
+						.map(event => this.createEvent(event))
+						// dispatch and measure time
+						.map(event => {
+							let start: number = performance.now();
+							el.dispatchEvent(event);
+							return performance.now() - start;
+						})
+					);
 				}
 
 				// if the dispatch time is below the action limit, pick a new element
@@ -489,7 +519,53 @@ namespace SinglePageFuzzer {
 
 			// wait until all mutations are done
 			this.lastAction = performance.now();
-			setTimeout(this.allDone.bind(this), 20);
+
+			// if no timeout is passed from the user, use the native one
+			(typeof this.config.timeout === 'function'
+				? this.config.timeout
+				: setTimeout
+			)(() => this.allDone(), 20);
+		}
+
+		private createEvent(eventName: string): Event {
+
+			// since switch is scope free, declare the event variable here
+			let event: Event;
+
+			switch (Runner.eventTypes[eventName]) {
+
+				case 'HTMLEvents':
+					event = document.createEvent('HTMLEvents');
+					event.initEvent(eventName, true, true);
+					break;
+
+				case 'Events':
+
+					let keyCode: number = this.config.keyCodes[Math.floor(Math.random() * this.config.keyCodes.length)];
+
+					// no keypress / keydown for modifiers
+					if ([16 , 17, 18, 91].indexOf(keyCode) > -1) {
+						eventName = 'keyup';
+					}
+
+					// initalize the event
+					event = document.createEvent('Events');
+					event.initEvent(eventName, true, true);
+
+					// set keycode
+					event['keyCode'] = keyCode;
+					event['which'] = keyCode;
+					event['shiftKey'] = false;
+					event['metaKey'] = false;
+					event['altKey'] = false;
+					event['ctrlKey'] = false;
+					break;
+
+				default:
+					console.error('unknown event ty[e: ' + Runner.eventTypes[eventName]);
+			}
+
+			return event;
 		}
 
 		// check if the browser has finished the action
@@ -532,7 +608,12 @@ namespace SinglePageFuzzer {
 
 			} else {
 				this.lastAction = performance.now();
-				setTimeout(this.allDone.bind(this), 20);
+
+				// if no timeout is passed from the user, use the native one
+				(typeof this.config.timeout === 'function'
+					? this.config.timeout
+					: setTimeout
+				)(() => this.allDone(), 20);
 			}
 		}
 
