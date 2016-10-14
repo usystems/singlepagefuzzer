@@ -1,0 +1,33 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Fuzzer Bookmarklets</title>
+    <style type="text/css">
+        body {
+            font-family: Verdana, sans-serif;
+            font-size: 80%;
+        }
+        .bookmarklet {
+            cursor: move;
+            background: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px;
+            text-decoration: none;
+            color: #333;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fuzzer Bookmarklets</h1>
+    <div>Drag these to your bookmark bar and click them to start the fuzzer on any website.</div>
+    <p>
+        Simple: <a class="bookmarklet" href="javascript:(function(el){el.src='https://cdn.rawgit.com/usystems/singlepagefuzzer/master/src/singlepagefuzzer.js';el.onload=function(){SinglePageFuzzer.start()};document.head.appendChild(el);})(document.createElement('script'));">Start Fuzzer</a>
+    </p>
+    <p>
+        Customized: <a class="bookmarklet" href="javascript:(function(el){el.src='https://cdn.rawgit.com/usystems/singlepagefuzzer/master/src/singlepagefuzzer.js';el.onload=function(){var config = new SinglePageFuzzer.Config();config.selectFilter = function(x, y, el) {while (el !== null) {if (el.nodeName == 'SECTION') return true;else el = el.parentElement;}return false;};SinglePageFuzzer.start(config);};document.head.appendChild(el);})(document.createElement('script'));">Start Customized Fuzzer</a>
+    </p>
+</body>
+</html>
