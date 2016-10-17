@@ -8,29 +8,71 @@ namespace SinglePageFuzzer {
 	'use strict';
 
 	/**
+	 * Human readable key codes
+	 */
+	export const BACKSPACE: number = 8;
+	export const TAB: number = 9;
+	export const ENTER: number = 13;
+	export const SHIFT: number = 16;
+	export const CTRL: number = 17;
+	export const ALT: number = 18;
+	export const CAPSLOCK: number = 20;
+	export const ESC: number = 27;
+	export const SPACE: number = 32;
+	export const PAGEUP: number = 33;
+	export const PAGEDOWN: number = 34;
+	export const END: number = 35;
+	export const HOME: number = 36;
+	export const LEFT: number = 37;
+	export const UP: number = 38;
+	export const RIGHT: number = 39;
+	export const DOWN: number = 40;
+	export const INSERT: number = 45;
+	export const DELETE: number = 46;
+
+	/**
+	 * Interface for an event
+	 */
+	interface IEvent {
+
+		/**
+		 * name of the event, e.g. click
+		 */
+		name: string;
+
+		/**
+		 * Event type, e.g. HTMLEvents
+		 */
+		type: string;
+
+		/**
+		 * For keyboard events, a keyCode generator is attached
+		 */
+		keyCode?: () => number; // only used for keydown, keypress, keyup
+		// TODO: add button?: number|number[]|() => number;
+		// TODO: add touches?: TouchList|() => TouchList;
+	}
+
+	/**
+	 * Interface for the event probabilities
+	 */
+	interface  IEventProbability {
+
+		/**
+		 * Probability the event list occures with
+		 */
+		probability: number;
+
+		/**
+		 * A list of events to dispatch
+		 */
+		events: IEvent[];
+	}
+
+	/**
 	 * Configuration of the
 	 */
 	export interface IConfig {
-
-		/**
-		 * Number of seconds to stop if the fuzzer has not been stoped. If 0, the fuzzer will run until stop is called
-		 */
-		stopAfter: number;
-
-		/**
-		 * Should the fuzzer activate a onbeforunload hook?
-		 */
-		preventUnload: boolean;
-
-		/**
-		 * Should the fuzzer patch the send method of the XMLHttpRequest object?
-		 */
-		patchXMLHttpRequestSend: boolean;
-
-		/**
-		 * A list of charachters the fuzzer picks uniformly to generate input values
-		 */
-		allowedChars: string[];
 
 		/**
 		 * The distribution of the native even creation of the fuzzer. The probabilities must add up to 1
@@ -39,12 +81,12 @@ namespace SinglePageFuzzer {
 		 * If the event is a keyboard event (one of keydown, keypress, keyup) a keyCode is picked equally distributed
 		 * from keyCodes
 		 */
-		eventDistribution: { probability: number; events: string|string[] }[];
+		eventDistribution?: IEventProbability[];
 
 		/**
-		 * List of key codes to pick from if a key event is simulated
+		 * A list of charachters the fuzzer picks uniformly to generate input values
 		 */
-		keyCodes: number[];
+		allowedChars?: string[];
 
 		/**
 		 * Hook to overwrite the timeout function to wait if an event happens. e.g if you are using angular, you can use
@@ -64,109 +106,271 @@ namespace SinglePageFuzzer {
 		selectFilter?: (x: number, y: number, el: Element) => boolean;
 
 		/**
-		 * Return the lambda for the poisson distribution of the number of simulatanious events. Default: 1
-		 * @param {number} start starttime of the runner
-		 * @return {number} lambda of the poisson distribution
+		 * In the request object, the parameters of delaying and droping the requests are specified. If the request
+		 * object is passed, the send method of the XMLHttpRequest object is patched.
 		 */
-		lambda?: (start: number) => number;
+		request?: {
 
-		/**
-		 * Introduce a lag for every xhr request
-		 * @param {XMLHttpRequest} xhr request object
-		 * @param {any[]} args arguments, passed to the send function
-		 * @return {number} miliseconds to wait befor the request is sent
-		 */
-		lag?: (xhr: XMLHttpRequest, args: any[]) => number;
+			/**
+			 * Introduce a lag for every xhr request
+			 * @param {XMLHttpRequest} xhr request object
+			 * @param {any[]} args arguments, passed to the send function
+			 * @return {number} miliseconds to wait befor the request is sent
+			 */
+			lag?: number|((xhr: XMLHttpRequest, args: any[]) => number);
 
-		/**
-		 * Deceides if the request should be dropped before sending
-		 * @param {XMLHttpRequest} xhr request object
-		 * @param {any[]} args arguments, passed to the send function
-		 * @return (boolean) if the request should be droped before sending
-		 */
-		dropRequest?: (xhr: XMLHttpRequest, args: any[]) => boolean;
+			/**
+			 * Deceides if the request should be dropped before sending
+			 * @param {XMLHttpRequest} xhr request object
+			 * @param {any[]} args arguments, passed to the send function
+			 * @return {boolean} if the request should be droped before sending
+			 */
+			dropRequest?: number|((xhr: XMLHttpRequest, args: any[]) => boolean);
 
-		/**
-		 * Deceides if the response from the server should be dropped
-		 * @param {XMLHttpRequest} xhr request object
-		 * @param {any[]} args arguments, passed to the send function
-		 * @return (boolean) if the resonse from the server should be droped
-		 */
-		dropResponse?: (xhr: XMLHttpRequest, args: any[]) => boolean;
+			/**
+			 * Deceides if the response from the server should be dropped
+			 * @param {XMLHttpRequest} xhr request object
+			 * @param {any[]} args arguments, passed to the send function
+			 * @return {boolean} if the resonse from the server should be droped
+			 */
+			dropResponse?: number|((xhr: XMLHttpRequest, args: any[]) => boolean);
 
-		/**
-		 * If the fuzzer goes offline, when should it go online again
-		 * @return (number) miliseconds to wait until it goes online
-		 */
-		online?: () => number;
+			/**
+			 * If the fuzzer goes offline, when should it go online again
+			 * @return {number} miliseconds to wait until it goes online
+			 */
+			online?: number|(() => number);
 
-		/**
-		 * If the fuzzer goes online, when should it go offline again
-		 * @return (number) miliseconds to wait until it goes offline
-		 */
-		offline?: () => number;
+			/**
+			 * If the fuzzer goes online, when should it go offline again
+			 * @return {number} miliseconds to wait until it goes offline
+			 */
+			offline?: number|(() => number);
+
+		};
 	}
 
 	/**
-	 * Default implementation of the config interface
+	 * Create an event probability.
+	 * @param {number} probability probability the event list occures with
+	 * @param {IEvent[]} events a list of events to dispatch
+	 * @return {IEventProbability} click event
 	 */
-	export class Config implements IConfig {
-
-		// run until stop is called
-		public stopAfter: number = 0;
-
-		public preventUnload: boolean = false;
-
-		public patchXMLHttpRequestSend: boolean = true;
-
-		public allowedChars: string[] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
-			'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-			'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Y', 'ä', 'ö', 'ü,', 'Ä', 'Ö', 'Ü',
-			'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
-			'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
-			'?', ';', '{', '}', '$', ' ', '\t', '\n'];
-
-		public eventDistribution: { probability: number; events: string|string[] }[] = [
-			{ probability: 0.5, events: 'click'},
-			// { probability: 0.1, events: ['mousemove', 'click']},
-			{ probability: 0.2, events: 'dblclick'},
-			{ probability: 0.1, events: 'submit'},
-			{ probability: 0.2, events: ['keydown', 'keypress', 'keyup'] }
-			// , { probability: 0.1, events: ['mousedown', 'mouseup'] }
-		];
-
-		public keyCodes: number[] = [
-			8, // backspace
-			9, // tab
-			13, // enter
-			16, // shift
-			17, // ctrl
-			18, // alt
-			20, // capslock
-			27, // esc
-			32, // space
-			33, // pageup
-			34, // pagedown
-			35, // end
-			36, // home
-			37, // left
-			38, // up
-			39, // right
-			40, // down
-			45, // ins
-			46, // del
-			46, // delete
-			91, // meta
-			93, // meta
-			224 // meta
-		];
+	export function createEventProbability(probability: number, events: IEvent[]): IEventProbability {
+		return { probability: probability, events: events };
 	}
+
+	/**
+	 * Create a click event for the eventDistribution
+	 * @return {IEvent} click event
+	 */
+	export function createClick(): IEvent {
+		return { name: 'click', type: 'HTMLEvents' };
+	}
+
+	/**
+	 * Create a dblclick event for the eventDistribution
+	 * @return {IEvent} dblclick event
+	 */
+	export function createDblclick(): IEvent {
+		return { name: 'dblclick', type: 'HTMLEvents' };
+	}
+
+	/**
+	 * Create a submit event for the eventDistribution. A submit can only be dispatched on a from element, so if
+	 * this.form is a HTMLFormElement, the submit event is dispatched on this.form else its dispatched on the
+	 * element itself.
+	 * @return {IEvent} submit event
+	 */
+	export function createSubmit(): IEvent {
+		return { name: 'submit', type: 'HTMLEvents' };
+	}
+
+	/**
+	 * Create a input event for the eventDistribution
+	 * @return {IEvent} input event
+	 */
+	export function createInput(): IEvent {
+		return { name: 'input', type: 'HTMLEvents' };
+	}
+
+	/**
+	 * Create a keydown event for the eventDistribution
+	 * @param {number|number[]|()=>number} keyCodes key code the event ist called with. The following types can be
+	 * passed
+	 * 	- number: the event will always have the passed number as key code
+	 * 	- number[]: each time a number is coosen uniformly from the list of key codes
+	 * 	- ()=>number: a function which is called for every event and return a keycode
+	 * @return {IEvent} keydown event
+	 */
+	export function createKeydown(keyCodes?: number|number[]|(() => number)): IEvent {
+		if (typeof keyCodes === 'number') {
+			return { name: 'keydown', type: 'Events', keyCode: (): number => keyCodes };
+		} else if (Array.isArray(keyCodes)) {
+			return {
+				name: 'keydown',
+				type: 'Events',
+				keyCode: (): number => keyCodes[Math.floor(Math.random() * keyCodes.length)]
+			};
+		} else if (typeof keyCodes === 'function') {
+			return { name: 'keydown', type: 'Events', keyCode: keyCodes };
+		} else {
+			return { name: 'keydown', type: 'Events' };
+		}
+	}
+
+	/**
+	 * Create a keypress event for the eventDistribution
+	 * @param {number|number[]|()=>number} keyCodes key code the event ist called with. The following types can be
+	 * passed
+	 * 	- number: the event will always have the passed number as key code
+	 * 	- number[]: each time a number is coosen uniformly from the list of key codes
+	 * 	- ()=>number: a function which is called for every event and return a keycode
+	 * @return {IEvent} keypress event
+	 */
+	export function createKeypress(keyCodes?: number|number[]|(() => number)): IEvent {
+		if (typeof keyCodes === 'number') {
+			return { name: 'keypress', type: 'Events', keyCode: (): number => keyCodes };
+		} else if (Array.isArray(keyCodes)) {
+			return {
+				name: 'keypress',
+				type: 'Events',
+				keyCode: (): number => keyCodes[Math.floor(Math.random() * keyCodes.length)]
+			};
+		} else if (typeof keyCodes === 'function') {
+			return { name: 'keypress', type: 'Events', keyCode: keyCodes };
+		} else {
+			return { name: 'keypress', type: 'Events' };
+		}
+	}
+
+	/**
+	 * Create a keyup event for the eventDistribution
+	 * @param {number|number[]|()=>number} keyCodes key code the event ist called with. The following types can be
+	 * passed
+	 * 	- number: the event will always have the passed number as key code
+	 * 	- number[]: each time a number is coosen uniformly from the list of key codes
+	 * 	- ()=>number: a function which is called for every event and return a keycode
+	 * @return {IEvent} keyup event
+	 */
+	export function createKeyup(keyCodes?: number|number[]|(() => number)): IEvent {
+		if (typeof keyCodes === 'number') {
+			return { name: 'keyup', type: 'Events', keyCode: (): number => keyCodes };
+		} else if (Array.isArray(keyCodes)) {
+			return {
+				name: 'keyup',
+				type: 'Events',
+				keyCode: (): number => keyCodes[Math.floor(Math.random() * keyCodes.length)]
+			};
+		} else if (typeof keyCodes === 'function') {
+			return { name: 'keyup', type: 'Events', keyCode: keyCodes };
+		} else {
+			return { name: 'keyup', type: 'Events' };
+		}
+	}
+
+	/**
+	 * Create a touchstart event for the eventDistribution
+	 * @return {IEvent} touchstart event
+	 */
+	export function createTouchstart(): IEvent {
+		return { name: 'touchstart', type: 'TouchEvent' };
+	}
+
+	/**
+	 * Create a touchend event for the eventDistribution
+	 * @return {IEvent} touchend event
+	 */
+	export function createTouchend(): IEvent {
+		return { name: 'touchend', type: 'TouchEvent' };
+	}
+
+	/**
+	 * Create a touchmove event for the eventDistribution
+	 * @return {IEvent} touchmove event
+	 */
+	export function createTouchmove(): IEvent {
+		return { name: 'touchmove', type: 'TouchEvent' };
+	}
+
+	/**
+	 * Create a touchcancel event for the eventDistribution
+	 * @return {IEvent} touchcancel event
+	 */
+	export function createTouchcancel(): IEvent {
+		return { name: 'touchcancel', type: 'TouchEvent' };
+	}
+
+	/**
+	 * Create a mouseenter event for the eventDistribution
+	 * @return {IEvent} mouseenter event
+	 */
+	export function createMouseenter(): IEvent {
+		return { name: 'mouseenter', type: 'MouseEvents' };
+	}
+
+	/**
+	 * Create a mouseover event for the eventDistribution
+	 * @return {IEvent} mouseover event
+	 */
+	export function createMouseover(): IEvent {
+		return { name: 'mouseover', type: 'MouseEvents' };
+	}
+
+	/**
+	 * Create a mousemove event for the eventDistribution
+	 * @return {IEvent} mousemove event
+	 */
+	export function createMousemove(): IEvent {
+		return { name: 'mousemove', type: 'MouseEvents' };
+	}
+
+	/**
+	 * Create a mousedown event for the eventDistribution
+	 * @return {IEvent} mousedown event
+	 */
+	export function createMousedown(): IEvent {
+		return { name: 'mousedown', type: 'MouseEvents' };
+	}
+
+	/**
+	 * Create a mouseup event for the eventDistribution
+	 * @return {IEvent} mouseup event
+	 */
+	export function createMouseup(): IEvent {
+		return { name: 'mouseup', type: 'MouseEvents' };
+	}
+
+	/**
+	 * Create a mouseleave event for the eventDistribution
+	 * @return {IEvent} mouseleave event
+	 */
+	export function createMouseleave(): IEvent {
+		return { name: 'mouseleave', type: 'MouseEvents' };
+	}
+
+	/**
+	 * Create a mouseout event for the eventDistribution
+	 * @return {IEvent} mouseout event
+	 */
+	export function createMouseout(): IEvent {
+		return { name: 'mouseout', type: 'MouseEvents' };
+	}
+
+	// TODO: implement
+	// dragstart: 'DragEvent',
+	// drag: 'DragEvent',
+	// dragend: 'DragEvent',
+	// dragenter: 'DragEvent',
+	// dragover: 'DragEvent',
+	// dragleave: 'DragEvent',
+	// drop: 'DragEvent'
 
 	/**
 	 * Start the Fuzzer
 	 * @param {IConfig} config options for the fuzzer
 	 */
-	export function start(config: IConfig = new Config()): void {
+	export function start(config: IConfig): void {
 
 		// make sure the runner has stopped
 		stop();
@@ -228,8 +432,6 @@ namespace SinglePageFuzzer {
 	class Context {
 		// active runner
 		public static runner: Runner = null;
-		// cache for the onbeforeunload function
-		public static onbeforeunload: (ev: BeforeUnloadEvent) => string;
 		// cache for the onerror function
 		public static onerror: ErrorEventHandler;
 	}
@@ -239,42 +441,14 @@ namespace SinglePageFuzzer {
 	 */
 	class Runner {
 
-		private static eventTypes: { [name: string]: string } = {
-			click:  'HTMLEvents',
-			dblclick:  'HTMLEvents',
-			submit:  'HTMLEvents',
-			keydown:  'Events',
-			keypress:  'Events',
-			keyup:  'Events'
-			// TODO: implement these
-			// // use http://marcgrabanski.com/simulating-mouse-click-events-in-javascript/ to simulate mouse events
-			// mouseenter: 'MouseEvents',
-			// mouseover: 'MouseEvents',
-			// mousemove: 'MouseEvents',
-			// mousedown: 'MouseEvents',
-			// mouseup: 'MouseEvents',
-			// mouseleave: 'MouseEvents',
-			// mouseout: 'MouseEvents',
-			// // use http://stackoverflow.com/questions/18059860/manually-trigger-touch-event for touch events
-			// touchstart: 'TouchEvent',
-			// touchend: 'TouchEvent',
-			// touchmove: 'TouchEvent',
-			// touchcancel: 'TouchEvent',
-			// dragstart: 'DragEvent',
-			// drag: 'DragEvent',
-			// dragend: 'DragEvent',
-			// dragenter: 'DragEvent',
-			// dragover: 'DragEvent',
-			// dragleave: 'DragEvent',
-			// drop: 'DragEvent'
-
-		};
+		// functino to get a timestamp in microseconds
+		private now: () => number;
 
 		// dom MutationObserver to track DOMChanges
 		private observer: MutationObserver;
 
-		// dom Elements we currently working on
-		private activeElements: Element[];
+		// dom Elementswe currently working on
+		private activeElement: Element;
 
 		// time, when the runner has to stop in ms
 		private startTime: number;
@@ -308,59 +482,65 @@ namespace SinglePageFuzzer {
 		private lineTimeout: number = null;
 
 		// a cumulative version of the event distribution
-		private cumulativeEventDistribution: { probability: number, events: string[] }[] = [];
+		private cumulativeEventDistribution: IEventProbability[] = [];
+
+		// A list of charachters the fuzzer picks uniformly to generate input values
+		private allowedChars: string[] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+			'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+			'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Y', 'ä', 'ö', 'ü,', 'Ä', 'Ö', 'Ü',
+			'ß', 'à', 'ç', 'è', 'ê', 'ë', 'ì', 'î', 'ï', 'ò', 'ó', 'ù', 'ą', 'ć', 'ĉ', 'ę', 'ĝ', 'ĥ', 'ĵ', 'ł', 'ń',
+			'œ', 'ś', 'ŝ', 'ŭ', 'ź', 'ż', '+', '%', '&', '/', '\\', '!', '^', '`', '"', '\'', '[', ']', '<', '>', ':',
+			'?', ';', '{', '}', '$', ' ', '\t', '\n'];
+
+		// In the request object, the parameters of delaying and droping the requests are specified
+		private request: {
+			lag?: (xhr: XMLHttpRequest, args: any[]) => number;
+			dropRequest?: (xhr: XMLHttpRequest, args: any[]) => boolean;
+			dropResponse?: (xhr: XMLHttpRequest, args: any[]) => boolean;
+			online?: () => number;
+			offline?: () => number;
+		} = null;
+
+		// timeout funciton to use
+		private timeout: (handler: () => void, timeout: number) => number =
+			(handler: () => void, timeout: number): number => setTimeout(handler, timeout);
+
+		// hook to filter the selected element
+		private selectFilter: (x: number, y: number, el: Element) => boolean = null;
 
 		// create a runner and directly start picking element
-		constructor(private config: IConfig) {
+		constructor(config: IConfig = {}) {
 
-			// determine when to stop. If config.stopAfter == 0, run until stop is called
-			this.startTime = performance.now();
+			// initalize the now function, if performance.now exits use it, else use Date.now
+			if ('performance' in window) {
+				this.now = () => performance.now();
+			} else {
+				this.now = () => Date.now();
+			}
 
-			// initalize the mutation ovserver to observe all changes on the page
-			this.observer = new MutationObserver((mutations: MutationRecord[]): void => {
+			// remember the start time
+			this.startTime = this.now();
 
-				// update the last change time
-				this.lastAction = performance.now();
+			// initalize dom observer
+			this.initalizeObserver();
 
-				if (!this.hasDOMChanged) {
-					mutations.forEach((mutation: MutationRecord): void => {
+			// set the select filter
+			if (typeof config.selectFilter === 'function') {
+				this.selectFilter = config.selectFilter;
+			}
 
-						// only register non hidden elements as dom mutations
-						/* tslint:disable:no-string-literal */
-						if (typeof mutation.target['offsetParent'] != 'undefined' && mutation.target['offsetParent'] !== null) {
-							this.hasDOMChanged = true;
-						}
-					});
-				}
-			});
-			this.observer.observe(document.getElementsByTagName('body')[0], {
-				childList: true,
-				attributes: true,
-				characterData: true,
-				subtree: true
-			});
-
+			// assemble the cumulative event probability
+			let eventDistribution: IEventProbability[] = config.eventDistribution;
+			if (!Array.isArray(eventDistribution)) {
+				eventDistribution = [SinglePageFuzzer.createEventProbability(1, [SinglePageFuzzer.createClick()])];
+			}
 			let cumulativeProbability: number = 0;
-			this.cumulativeEventDistribution = config.eventDistribution
-				.map(
-					// typescript is not able to handle string|string[] do convert it to void.
-					({ probability, events }: {probability: number, events: any}
-				): { probability: number, events: string[] } => {
-					if (!Array.isArray(events)) {
-						events = [events];
-					}
-					events.forEach((event: string) => {
-						if (!Runner.eventTypes.hasOwnProperty(event)) {
-							console.error('unknown event: ' + event);
-						}
-					});
+			this.cumulativeEventDistribution = eventDistribution
+				.map(({ probability, events }): { probability: number, events: IEvent[] } => {
 					cumulativeProbability += probability;
 					return { probability: cumulativeProbability, events: events };
 				});
-			if (this.cumulativeEventDistribution.length == 0) {
-				console.error('config.eventDistribution must not be emtpy');
-				return;
-			} else  if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1].probability != 1) {
+			if (this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1].probability != 1) {
 				console.error(
 					'The event probabilities do not add up to 1, but to ' +
 					this.cumulativeEventDistribution[this.cumulativeEventDistribution.length - 1].probability
@@ -368,31 +548,45 @@ namespace SinglePageFuzzer {
 				return;
 			}
 
-			// set the onbeforunload function
-			if (config.preventUnload) {
-				Context.onbeforeunload = window.onbeforeunload;
-				window.onbeforeunload = (): string => {
-					return 'Are you sure you want to leave the page while the SinglePageFuzzer is running?!';
-				};
-			}
-
-			if (config.patchXMLHttpRequestSend) {
+			// if the request is passed overwrite the send funtion of the XHR object
+			if (typeof config.request === 'object') {
 				this.origXMLHttpRequestSend = XMLHttpRequest.prototype.send;
 				// use a wrapper function to keep the scope of the xhr object
 				let sendProxy: (xhr: XMLHttpRequest, args: any[]) => void = this.sendProxy.bind(this);
 				XMLHttpRequest.prototype.send = function(...args: any[]): void {
 					sendProxy(this, args);
 				};
-			}
 
-			// if an on/offline timer is set, initalize timeout
-			this.offline = false;
-			if (typeof this.config.offline == 'function') {
-				if (typeof this.config.online != 'function') {
-					console.warn('there is an offline handler, but no online handler, so the fuzzer goes offline but' +
-						'never online again.');
+				// create request function
+				this.request = {};
+
+				// set the lag, online and offline function
+				['lag', 'online', 'offline'].forEach(name => {
+					if (typeof config.request[name] === 'number') {
+						this.request[name] = (): number => config.request[name];
+					} else if (typeof config.request[name] === 'function') {
+						this.request[name] = config.request[name];
+					}
+				});
+
+				// set the dropRequest and dropResponse function
+				['dropRequest', 'dropResponse'].forEach(name => {
+					if (typeof config.request[name] === 'number') {
+						this.request[name] = (): boolean => Math.random() < config.request[name];
+					} else if (typeof config.request[name] === 'function') {
+						this.request[name] = config.request[name];
+					}
+				});
+
+				// if an on/offline timer is set, initalize timeout
+				this.offline = false;
+				if (typeof this.request.offline === 'function') {
+					if (typeof this.request.online !== 'function') {
+						console.warn('there is an offline handler, but no online handler, so the fuzzer goes offline ' +
+							'but never online again.');
+					}
+					this.toggleLine();
 				}
-				this.toggleLine();
 			}
 
 			// set the onerror function
@@ -414,12 +608,7 @@ namespace SinglePageFuzzer {
 		// stop and destory the runner
 		public stop(): void {
 
-			// reset the onbeforeunload function
-			if (this.config.preventUnload) {
-				window.onbeforeunload = Context.onbeforeunload;
-			}
-
-			if (this.config.patchXMLHttpRequestSend) {
+			if (this.request !== null) {
 				XMLHttpRequest.prototype.send = this.origXMLHttpRequestSend;
 			}
 
@@ -435,117 +624,196 @@ namespace SinglePageFuzzer {
 			this.observer.disconnect();
 
 			// make sure the runner stops
-			this.config.stopAfter = -1;
+			this.timeout = (): number => 0;
 
 			// remove the runner from the context
 			Context.runner = null;
 		}
 
+		// initalize the mutation ovserver to observe all changes on the page
+		private initalizeObserver(): void {
+			this.observer = new MutationObserver((mutations: MutationRecord[]): void => {
+
+				// update the last change time
+				this.lastAction = this.now();
+
+				if (!this.hasDOMChanged) {
+					mutations.forEach((mutation: MutationRecord): void => {
+
+						// only register non hidden elements as dom mutations
+						/* tslint:disable:no-string-literal */
+						if (typeof mutation.target['offsetParent'] != 'undefined' && mutation.target['offsetParent'] !== null) {
+							this.hasDOMChanged = true;
+						}
+					});
+				}
+			});
+			this.observer.observe(document.getElementsByTagName('body')[0], {
+				childList: true,
+				attributes: true,
+				characterData: true,
+				subtree: true
+			});
+		}
+
 		private startAction(): void {
 
-			// check if the runner is done
-			if (this.config.stopAfter != 0 && this.startTime + this.config.stopAfter * 1000 < performance.now()) {
-				return this.stop();
-			}
-
-			// reset the active elements array and the style changes
-			this.activeElements = [];
-
-			// as long as we dont have timing statistics, only select one node to get more statistics
-			let len: number = 1;
-			if (this.withoutActionLimit > 0) {
-
-				// else add more elements with a poisson distribution
-				let lambda: number = typeof this.config.lambda == 'function' ? this.config.lambda(this.startTime) : 1;
-				len = Math.max(1, poisson(lambda));
-			}
-
-			// find sutable elements
-			while (this.activeElements.length < len) {
-
-				// pick an element from the viewport
-				let el: Element = this.selectElement();
-
-				// set the value for inputs
-				if (el.nodeName == 'INPUT') {
-
-					// empty the input value
-					el['value'] = '';
-
-					// generate a random number of chars, in average 16
-					for (let i: number = poisson(16); i > 0; i -= 1) {
-						el['value'] += this.config.allowedChars[
-							Math.floor(Math.random() * this.config.allowedChars.length)
-						];
-					}
-				}
-
-				{
-					// pick the event
-					let probability: number = 0;
-					let events: string[] = null;
-
-					const rng: number = Math.random();
-					for ({ probability, events } of this.cumulativeEventDistribution) {
-						if (rng < probability) {
-							break;
-						}
-					}
-
-					// dispach events to picked element and use the longest event time as dispatch time
-					this.dispatchTime = Math.max(...events
-						// map to native event
-						.map(event => this.createEvent(event))
-						// dispatch and measure time
-						.map(event => {
-							let start: number = performance.now();
-							el.dispatchEvent(event);
-							return performance.now() - start;
-						})
-					);
-				}
-
-				// if the dispatch time is below the action limit, pick a new element
-				if (this.dispatchTime < this.withoutActionLimit) {
-					continue;
-				}
-
-				// we found a valid element
-				this.activeElements.push(el);
-			}
+			// select an active element
+			this.selectActiveElement();
 
 			// reset the dom change tracker
 			this.hasDOMChanged = false;
 
 			// wait until all mutations are done
-			this.lastAction = performance.now();
+			this.lastAction = this.now();
 
 			// if no timeout is passed from the user, use the native one
-			(typeof this.config.timeout === 'function'
-				? this.config.timeout
-				: setTimeout
-			)(() => this.allDone(), 20);
+			this.timeout(() => this.allDone(), 20);
 		}
 
-		private createEvent(eventName: string): Event {
+		private selectActiveElement(): void {
+
+			// pick an element from the viewport
+			let el: Element;
+			let x: number;
+			let y: number;
+			[el, x, y] = this.selectElement();
+
+			// set the value for inputs
+			if (el.nodeName == 'INPUT') {
+
+				// empty the input value
+				el['value'] = '';
+
+				// generate a random number of chars, in average 16
+				for (let i: number = poisson(16); i > 0; i -= 1) {
+					el['value'] += this.allowedChars[
+						Math.floor(Math.random() * this.allowedChars.length)
+					];
+				}
+			}
+
+			{
+				// pick the event
+				let probability: number = 0;
+				let events: IEvent[] = [];
+
+				const rng: number = Math.random();
+				for ({ probability, events } of this.cumulativeEventDistribution) {
+					if (rng < probability) {
+						break;
+					}
+				}
+
+				// dispach events to picked element and use the longest event time as dispatch time
+				this.dispatchTime = Math.max(...events
+					// map to native event, dispatch and measure time
+					.map(event => this.createEvent(event, el, x, y))
+				);
+			}
+
+			// if the dispatch time is below the action limit, select a new element
+			if (this.dispatchTime < this.withoutActionLimit) {
+				this.selectActiveElement();
+
+			// else use the current one
+			} else {
+				this.activeElement = el;
+			}
+		}
+
+		// select an element from the visible part of the webpage
+		private selectElement(): [Element, number, number] {
+
+			// selected element to act on
+			let el: Element = null;
+			let x: number;
+			let y: number;
+
+			// pick points until a sutable element is found
+			while (el === null) {
+
+				// find a random element in viewport
+				x = Math.floor(Math.random() * window.innerWidth);
+				y = Math.floor(Math.random() * window.innerHeight);
+				el = document.elementFromPoint(x, y);
+
+				if (
+					// if you hit the scrollbar on OSX there is no element ...
+					el !== null &&
+					// if the selectFilter hook is valid check if the element passes the filter
+					typeof this.selectFilter === 'function' &&
+					!this.selectFilter(x, y, el)
+				) {
+					el = null;
+				}
+			}
+
+			// the element is valid
+			return [el, x, y];
+		}
+
+		private createEvent(props: IEvent, el: Element, x: number, y: number): number {
 
 			// since switch is scope free, declare the event variable here
 			let event: Event;
 
-			switch (Runner.eventTypes[eventName]) {
+			switch (props.type) {
 
 				case 'HTMLEvents':
 					event = document.createEvent('HTMLEvents');
-					event.initEvent(eventName, true, true);
+					event.initEvent(props.name, true, true);
+
+					// submit events only make sence on forms so trigger the event on the form event
+					if (props.name === 'submit' && el['form'] instanceof HTMLFormElement) {
+						el = el['form'];
+					}
+
+					break;
+
+				case 'TouchEvent':
+					// TODO: make touches configurable
+					event = document.createEvent('TouchEvent');
+					event['initUIEvent'](props.name, true, true);
+					event['touches'] = document.createTouchList(
+						document.createTouch(window, el, 0, window.scrollX + x, window.scrollY + y, x, y)
+					);
+					break;
+
+				case 'MouseEvents':
+					event = document.createEvent('MouseEvents');
+					event['initMouseEvent'](
+						props.name,
+						true, // bubbles
+						props.name != 'mousemove', // cancelable
+						window, // view
+						0, // detail
+						x, //screenX
+						y, // screenY
+						x, // clientX
+						y, // clientY
+						// TODO: make special keys configurable
+						false, // ctrlKey
+						false, // altKey
+						false, // shiftKey
+						false, // metaKey
+						// TODO: make buttons configurabel
+						1, // button first: 1, second: 4, third: 2
+						document['body'].parentNode // relatedTarget
+					);
 					break;
 
 				case 'Events':
 
-					let keyCode: number = this.config.keyCodes[Math.floor(Math.random() * this.config.keyCodes.length)];
+					let keyCode: number = null;
+					let eventName: string = props.name;
+					if (props.hasOwnProperty('keyCode')) {
+						keyCode = props.keyCode[Math.floor(Math.random() * props.keyCode.length)];
 
-					// no keypress / keydown for modifiers
-					if ([16 , 17, 18, 91].indexOf(keyCode) > -1) {
-						eventName = 'keyup';
+						// no keypress / keydown for modifiers
+						if ([16 , 17, 18, 91].indexOf(keyCode) > -1) {
+							eventName = 'keyup';
+						}
 					}
 
 					// initalize the event
@@ -553,8 +821,11 @@ namespace SinglePageFuzzer {
 					event.initEvent(eventName, true, true);
 
 					// set keycode
-					event['keyCode'] = keyCode;
-					event['which'] = keyCode;
+					if (keyCode !== null) {
+						event['keyCode'] = keyCode;
+						event['which'] = keyCode;
+					}
+					// TODO: make special keys configurable
 					event['shiftKey'] = false;
 					event['metaKey'] = false;
 					event['altKey'] = false;
@@ -562,96 +833,60 @@ namespace SinglePageFuzzer {
 					break;
 
 				default:
-					console.error('unknown event ty[e: ' + Runner.eventTypes[eventName]);
+					console.error('unknown event type: ' + props.type);
 			}
 
-			return event;
+			let start: number = this.now();
+			el.dispatchEvent(event);
+			return this.now() - start;
 		}
 
 		// check if the browser has finished the action
 		private allDone(): void {
-			let elapsed: number = performance.now() - this.lastAction;
+			let elapsed: number = this.now() - this.lastAction;
 
-			// if a dom mutation has occured, ore some backround javascript is running, wait for another 20 ms
+			// if a dom mutation has occured, or some backround javascript is running, wait for another 20 ms
 			if (elapsed >= 20 && elapsed < 25) {
 
-				// only change acceptance and color if only one element is selected, else we cannot map the mutations
-				// to the selected element
-				if (this.activeElements.length == 1) {
+				// do not reduce the acceptance of the input fields
+				if (this.hasDOMChanged || this.activeElement.nodeName == 'INPUT') {
 
-					// do not reduce the acceptance of the input fields
-					if (this.hasDOMChanged || this.activeElements[0].nodeName == 'INPUT') {
-
-						// if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
-						if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime) {
-							this.minWithMutationTime = this.dispatchTime;
-						}
-
-					} else {
-
-						// if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
-						if (this.dispatchTime > this.maxWithoutMutationTime) {
-							this.maxWithoutMutationTime = this.dispatchTime;
-						}
+					// if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
+					if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime) {
+						this.minWithMutationTime = this.dispatchTime;
 					}
 
-					// if the time limit for dispatch times without mutations has changed, update it
-					let limit: number = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
-					if (limit > this.withoutActionLimit) {
-						console.log(`update without action limit to ${limit.toFixed(2)} ms`);
-						this.withoutActionLimit = limit;
+				} else {
+
+					// if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
+					if (this.dispatchTime > this.maxWithoutMutationTime) {
+						this.maxWithoutMutationTime = this.dispatchTime;
 					}
+				}
+
+				// if the time limit for dispatch times without mutations has changed, update it
+				let limit: number = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
+				if (limit > this.withoutActionLimit) {
+					console.log(`update without action limit to ${limit.toFixed(2)} ms`);
+					this.withoutActionLimit = limit;
 				}
 
 				// start next action
 				this.startAction();
 
 			} else {
-				this.lastAction = performance.now();
+				this.lastAction = this.now();
 
 				// if no timeout is passed from the user, use the native one
-				(typeof this.config.timeout === 'function'
-					? this.config.timeout
-					: setTimeout
-				)(() => this.allDone(), 20);
+				this.timeout(() => this.allDone(), 20);
 			}
-		}
-
-		// select an element from the visible part of the webpage
-		private selectElement(): Element {
-
-			// selected element to act on
-			let el: Element = null;
-
-			// pick points until a sutable element is found
-			while (el === null) {
-
-				// find a random element in viewport
-				let x: number = Math.floor(Math.random() * window.innerWidth);
-				let y: number = Math.floor(Math.random() * window.innerHeight);
-				el = document.elementFromPoint(x, y);
-
-				if (
-					// if you hit the scrollbar on OSX there is no element ...
-					el !== null &&
-					// if the selectFilter hook is valid check if the element passes the filter
-					typeof this.config.selectFilter === 'function' &&
-					!this.config.selectFilter(x, y, el)
-				) {
-					el = null;
-				}
-			}
-
-			// the element is valid
-			return el;
 		}
 
 		// switch from online to offline state ...
 		private toggleLine(): void {
-			let fn: () => number = this.config[this.offline ? 'online' : 'offline'];
+			let fn: () => number = this.request[this.offline ? 'online' : 'offline'];
 			if (typeof fn == 'function') {
 				let duration: number = Math.round(fn());
-
 				this.lineTimeout = setTimeout(
 					(): void => {
 						this.offline = !this.offline;
@@ -672,9 +907,9 @@ namespace SinglePageFuzzer {
 			if (this.offline) {
 
 				// call the onerror handler, if the it exits, else call the onreadystatechange with xhr.status = 0
-				if (typeof xhr.onerror == 'function') {
+				if (typeof xhr.onerror === 'function') {
 					setTimeout(xhr.onerror.bind(xhr, null));
-				} else if (typeof xhr.onreadystatechange == 'function') {
+				} else if (typeof xhr.onreadystatechange === 'function') {
 					setTimeout((): void => {
 						xhr.status = 0;
 						for (let i: number = 0; i < 5; i += 1) {
@@ -685,7 +920,7 @@ namespace SinglePageFuzzer {
 				}
 
 			// do we want to drop the request?
-			} else if (typeof this.config.dropRequest == 'function' && this.config.dropRequest(xhr, args)) {
+			} else if (typeof this.request.dropRequest === 'function' && this.request.dropRequest(xhr, args)) {
 
 				console.log('drop request');
 
@@ -701,7 +936,7 @@ namespace SinglePageFuzzer {
 			} else {
 
 				// do we want to drop the response?
-				if (typeof this.config.dropResponse == 'function' && this.config.dropResponse(xhr, args)) {
+				if (typeof this.request.dropResponse == 'function' && this.request.dropResponse(xhr, args)) {
 
 					console.log('drop response');
 
@@ -719,10 +954,10 @@ namespace SinglePageFuzzer {
 
 
 				// sent the request
-				} else if (typeof this.config.lag == 'function') {
+				} else if (typeof this.request.lag == 'function') {
 					setTimeout(
 						(): void => this.origXMLHttpRequestSend.apply(xhr, args),
-						Math.max(0, this.config.lag(xhr, args))
+						Math.max(0, this.request.lag(xhr, args))
 					);
 
 				// else use the original send request

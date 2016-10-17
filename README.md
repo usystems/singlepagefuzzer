@@ -36,13 +36,12 @@ And it is super simple to use, just past the code snippet above in the browser c
 
 ###Main Functions
 
-* **`SinglePageFuzzer.start`**`(config = new SinglePageFuzzer.Config()): void`
+* **`SinglePageFuzzer.start`**`(config: IConfig): void`
 
   This is the main function to start the fuzzer.
 
   * **`config`**`: IConfig`    
-    Config object for the fuzzer (see below). The config object must implement the `SinglePageFuzzer.IConfig` interface. 
-    If the config is not passed, an instance of `SinglePageFuzzer.SinglePageFuzzer.Config` is created.
+    Config object for the fuzzer (see below). The config object must implement the `SinglePageFuzzer.IConfig` interface.
   * **`return`**: `void`
 
 * **`SinglePageFuzzer.stop`**`(): void`
@@ -53,24 +52,8 @@ And it is super simple to use, just past the code snippet above in the browser c
   
 ###**`SinglePageFuzzer.IConfig`**
 
-The Config Interface the argument of the start function must implement. This is only an Interface, so it cannot be
+The Config Interface defines the options for the start function. This is only an Interface, so it cannot be
 instanciated as an object.
-
-* **`stopAfter`**`: number`
-
-  Number of seconds to stop if the fuzzer has not been stoped. If 0, the fuzzer will run until stop is called
-
-* **`preventUnload`**`: boolean`
-
-  Should the fuzzer activate a onbeforunload hook?
-
-* **`patchXMLHttpRequestSend`**`: boolean`
-
-  Should the fuzzer patch the send method of the XMLHttpRequest object?
-
-* **`allowedChars`**`: string[]`
-
-  A list of charachters the fuzzer picks uniformly to generate input values
 
 * **`eventDistribution`**`: { probability: number; name: string; type: string }[]`
 
@@ -79,10 +62,6 @@ instanciated as an object.
   
   e.g `{ probability: 0.5, name: 'click', type: 'HTMLEvents' }` means the fuzzer creates with a probability of
   `0.5` a click event (which is of type HTMLEvents)
-
-* **`keyCodes`**`: number[]`
-
-  List of key codes to pick from if a key event is simulated
 
 * **`selectFilter?`**`(x: number, y: number, el: Element): boolean`
 
@@ -98,15 +77,6 @@ instanciated as an object.
     selected element
   * **`return`**`: boolean`
     return if the element can be selected
-
-* **`lambda?`**`(start: number) => number`
-    
-    Optional, return the lambda for the poisson distribution of the number of simulatanious events. Default: `1`
-    
-    * **`start`**`: number`
-      starttime of the runner
-    * **`lambda`**`: number`
-      lambda of the poisson distribution
 
 * **`lag`**`(xhr: XMLHttpRequest, args: any[]) => number`
 
@@ -149,6 +119,12 @@ instanciated as an object.
   If the fuzzer goes online, when should it go offline again
   * **`return`**`: number`
     miliseconds to wait until it goes offline
+
+
+* **`allowedChars`**`: string[]`
+
+  A list of charachters the fuzzer picks uniformly to generate input values
+
 
 ###**`SinglePageFuzzer.Config`**
 
@@ -246,23 +222,42 @@ class.
 The select filter class checks for each selected element if it is a descendant of the section and if so, return true 
 (which means we keep the element) else return false (which means discard the element).
 
-Now we start the Fuzzer with our customied config.
+Now we start the Fuzzer with our customized config.
 
 
 ```javascript
 (function(el){
-	el.src='https://cdn.rawgit.com/usystems/singlepagefuzzer/master/src/singlepagefuzzer.js';
-	el.onload=function(){
-		var config = new SinglePageFuzzer.Config();
-		config.selectFilter = function(x, y, el) {
-			while (el !== null) {
-				if (el.nodeName == 'SECTION') return true;
-				else el = el.parentElement;
-			}
-			return false;
-		};
-		SinglePageFuzzer.start(config);
-	};
-	document.head.appendChild(el);
+    el.src='https://cdn.rawgit.com/usystems/singlepagefuzzer/master/src/singlepagefuzzer.js';
+    el.onload=function(){
+        SinglePageFuzzer.start({
+            selectFilter: function(x, y, el) {
+                while (el !== null) {
+                    if (el.nodeName == 'SECTION') return true;
+                    else el = el.parentElement;
+                }
+                return false;
+            },
+            eventDistribution: [
+                SinglePageFuzzer.createEventProbability(0.5, [SinglePageFuzzer.createClick()]),
+                SinglePageFuzzer.createEventProbability(0.1, [SinglePageFuzzer.createDblclick()]),
+                SinglePageFuzzer.createEventProbability(0.2, [
+                    SinglePageFuzzer.createInput(),
+                    SinglePageFuzzer.createSubmit()
+                ]),
+                SinglePageFuzzer.createEventProbability(0.2, [
+                    SinglePageFuzzer.createKeydown(SinglePageFuzzer.ENTER),
+                    SinglePageFuzzer.createKeypress(SinglePageFuzzer.ENTER),
+                    SinglePageFuzzer.createKeyup(SinglePageFuzzer.ENTER)
+                ])
+            ],
+            request: {
+                lag: 1000, // 1s
+                dropRequest: 0.1, // 10%
+                dropResponse: 0.1, // 10%
+                offline: 10000, // 10s
+                online: 5000 // 5s
+            }
+        });
+    };
+    document.head.appendChild(el);
 })(document.createElement('script'));
-```
