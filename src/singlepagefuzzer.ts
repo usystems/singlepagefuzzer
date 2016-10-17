@@ -595,7 +595,9 @@ namespace SinglePageFuzzer {
 				console.error(message, url, line, col, error);
 
 				// call the original error handler
-				Context.onerror(message, url, line, col, error);
+				if (typeof Context.onerror == 'function') {
+					Context.onerror(message, url, line, col, error);
+				}
 
 				// do not prevent error default error handling
 				return false;
