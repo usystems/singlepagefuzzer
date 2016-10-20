@@ -118,46 +118,46 @@ eventDistribution: [
 
 At the moment the follwoing events are supported:
 
-	* click: SinglePageFuzzer.createdlick()
-	* dblclick: SinglePageFuzzer.createdblclick()
-	* submit: SinglePageFuzzer.createSubmit()
-	* input: SinglePageFuzzer.createInput()
-	* keydown: SinglePageFuzzer.createKeydown(keycode)
-	* keypress: SinglePageFuzzer.createKeypress(keycode)
-	* keyup: SinglePageFuzzer.createKeyup(keycode)
-	* touchstart: SinglePageFuzzer.createTouchstart()
-	* touchend: SinglePageFuzzer.createTouchend()
-	* touchmove: SinglePageFuzzer.createTouchmove()
-	* touchcancel: SinglePageFuzzer.createTouchcancel()
-	* mouseenter: SinglePageFuzzer.createMouseenter()
-	* mouseover: SinglePageFuzzer.createMouseover()
-	* mousemove: SinglePageFuzzer.createMousemove()
-	* mousedown: SinglePageFuzzer.createMousedown()
-	* mouseup: SinglePageFuzzer.createMouseup()
-	* mouseleave: SinglePageFuzzer.createMouseleave()
-	* mouseout: SinglePageFuzzer.createMouseout()
+  * click: SinglePageFuzzer.createdlick()
+  * dblclick: SinglePageFuzzer.createdblclick()
+  * submit: SinglePageFuzzer.createSubmit()
+  * input: SinglePageFuzzer.createInput()
+  * keydown: SinglePageFuzzer.createKeydown(keycode)
+  * keypress: SinglePageFuzzer.createKeypress(keycode)
+  * keyup: SinglePageFuzzer.createKeyup(keycode)
+  * touchstart: SinglePageFuzzer.createTouchstart()
+  * touchend: SinglePageFuzzer.createTouchend()
+  * touchmove: SinglePageFuzzer.createTouchmove()
+  * touchcancel: SinglePageFuzzer.createTouchcancel()
+  * mouseenter: SinglePageFuzzer.createMouseenter()
+  * mouseover: SinglePageFuzzer.createMouseover()
+  * mousemove: SinglePageFuzzer.createMousemove()
+  * mousedown: SinglePageFuzzer.createMousedown()
+  * mouseup: SinglePageFuzzer.createMouseup()
+  * mouseleave: SinglePageFuzzer.createMouseleave()
+  * mouseout: SinglePageFuzzer.createMouseout()
 
 A key code can be passed to the keyboard events. The following keycodes exits:
 
-	* SinglePageFuzzer.BACKSPACE = 8
-	* SinglePageFuzzer.TAB = 9
-	* SinglePageFuzzer.ENTER = 13
-	* SinglePageFuzzer.SHIFT = 16
-	* SinglePageFuzzer.CTRL = 17
-	* SinglePageFuzzer.ALT = 18
-	* SinglePageFuzzer.CAPSLOCK = 20
-	* SinglePageFuzzer.ESC = 27
-	* SinglePageFuzzer.SPACE = 32
-	* SinglePageFuzzer.PAGEUP = 33
-	* SinglePageFuzzer.PAGEDOWN = 34
-	* SinglePageFuzzer.END = 35
-	* SinglePageFuzzer.HOME = 36
-	* SinglePageFuzzer.LEFT = 37
-	* SinglePageFuzzer.UP = 38
-	* SinglePageFuzzer.RIGHT = 39
-	* SinglePageFuzzer.DOWN = 40
-	* SinglePageFuzzer.INSERT = 45
-	* SinglePageFuzzer.DELETE = 46
+  * SinglePageFuzzer.BACKSPACE = 8
+  * SinglePageFuzzer.TAB = 9
+  * SinglePageFuzzer.ENTER = 13
+  * SinglePageFuzzer.SHIFT = 16
+  * SinglePageFuzzer.CTRL = 17
+  * SinglePageFuzzer.ALT = 18
+  * SinglePageFuzzer.CAPSLOCK = 20
+  * SinglePageFuzzer.ESC = 27
+  * SinglePageFuzzer.SPACE = 32
+  * SinglePageFuzzer.PAGEUP = 33
+  * SinglePageFuzzer.PAGEDOWN = 34
+  * SinglePageFuzzer.END = 35
+  * SinglePageFuzzer.HOME = 36
+  * SinglePageFuzzer.LEFT = 37
+  * SinglePageFuzzer.UP = 38
+  * SinglePageFuzzer.RIGHT = 39
+  * SinglePageFuzzer.DOWN = 40
+  * SinglePageFuzzer.INSERT = 45
+  * SinglePageFuzzer.DELETE = 46
 
 ####Request
 
@@ -214,10 +214,10 @@ setTimeout(function() { SinglePageFuzzer.stop() }, 5000)
 ##Supported Browser
 Current versions fo the following browsers are supported
 
-	* Chrome
-	* Firefox
-	* Safari
-	* Edge
+  * Chrome
+  * Firefox
+  * Safari
+  * Edge
 
 
 
