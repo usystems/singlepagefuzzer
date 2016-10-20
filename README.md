@@ -139,25 +139,25 @@ At the moment the follwoing events are supported:
 
 A key code can be passed to the keyboard events. The following keycodes exits:
 
-	* BACKSPACE = 8
-	* TAB = 9
-	* ENTER = 13
-	* SHIFT = 16
-	* CTRL = 17
-	* ALT = 18
-	* CAPSLOCK = 20
-	* ESC = 27
-	* SPACE = 32
-	* PAGEUP = 33
-	* PAGEDOWN = 34
-	* END = 35
-	* HOME = 36
-	* LEFT = 37
-	* UP = 38
-	* RIGHT = 39
-	* DOWN = 40
-	* INSERT = 45
-	* DELETE = 46
+	* SinglePageFuzzer.BACKSPACE = 8
+	* SinglePageFuzzer.TAB = 9
+	* SinglePageFuzzer.ENTER = 13
+	* SinglePageFuzzer.SHIFT = 16
+	* SinglePageFuzzer.CTRL = 17
+	* SinglePageFuzzer.ALT = 18
+	* SinglePageFuzzer.CAPSLOCK = 20
+	* SinglePageFuzzer.ESC = 27
+	* SinglePageFuzzer.SPACE = 32
+	* SinglePageFuzzer.PAGEUP = 33
+	* SinglePageFuzzer.PAGEDOWN = 34
+	* SinglePageFuzzer.END = 35
+	* SinglePageFuzzer.HOME = 36
+	* SinglePageFuzzer.LEFT = 37
+	* SinglePageFuzzer.UP = 38
+	* SinglePageFuzzer.RIGHT = 39
+	* SinglePageFuzzer.DOWN = 40
+	* SinglePageFuzzer.INSERT = 45
+	* SinglePageFuzzer.DELETE = 46
 
 ####Request
 
