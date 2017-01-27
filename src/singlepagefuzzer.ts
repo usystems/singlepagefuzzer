@@ -878,15 +878,15 @@ namespace SinglePageFuzzer {
 			// if a dom mutation has occured, or some backround javascript is running, wait for another 20 ms
 			if (elapsed >= 20 && elapsed < 25) {
 
-				// do not reduce the acceptance of the input fields
-				if (this.hasDOMChanged || this.activeElement.nodeName == 'INPUT') {
+				if (this.hasDOMChanged) {
 
 					// if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
 					if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime) {
 						this.minWithMutationTime = this.dispatchTime;
 					}
 
-				} else {
+				// do not reduce the acceptance of the input fields
+				} else if (this.activeElement.nodeName != 'INPUT') {
 
 					// if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
 					if (this.dispatchTime > this.maxWithoutMutationTime) {
@@ -895,7 +895,7 @@ namespace SinglePageFuzzer {
 				}
 
 				// if the time limit for dispatch times without mutations has changed, update it
-				let limit: number = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
+				let limit: number = Math.min(0.8 * this.maxWithoutMutationTime, 0.5 * this.minWithMutationTime);
 				if (limit > this.withoutActionLimit) {
 					console.log(`update without action limit to ${limit.toFixed(2)} ms`);
 					this.withoutActionLimit = limit;
