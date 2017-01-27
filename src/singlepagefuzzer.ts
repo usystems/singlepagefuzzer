@@ -941,10 +941,15 @@ namespace SinglePageFuzzer {
 					setTimeout(xhr.onerror.bind(xhr, null));
 				} else if (typeof xhr.onreadystatechange === 'function') {
 					setTimeout((): void => {
-						xhr.status = 0;
+						let cpy: any = {};
+						// xhr.status and xhr.readyState are readonly, so make a copy, bo be able to change them
+						Object.keys(xhr).forEach(key => {
+							cpy[key] = xhr[key];
+						});
+						cpy.status = 0;
 						for (let i: number = 0; i < 5; i += 1) {
-							xhr.readyState = i;
-							xhr.onreadystatechange(null);
+							cpy.readyState = i;
+							cpy.onreadystatechange(null);
 						}
 					});
 				}
