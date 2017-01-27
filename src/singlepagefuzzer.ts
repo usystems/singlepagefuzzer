@@ -161,22 +161,6 @@ namespace SinglePageFuzzer {
 	}
 
 	/**
-	 * Create a click event for the eventDistribution
-	 * @return {IEvent} click event
-	 */
-	export function createClick(): IEvent {
-		return { name: 'click', type: 'HTMLEvents' };
-	}
-
-	/**
-	 * Create a dblclick event for the eventDistribution
-	 * @return {IEvent} dblclick event
-	 */
-	export function createDblclick(): IEvent {
-		return { name: 'dblclick', type: 'HTMLEvents' };
-	}
-
-	/**
 	 * Create a submit event for the eventDistribution. A submit can only be dispatched on a from element, so if
 	 * this.form is a HTMLFormElement, the submit event is dispatched on this.form else its dispatched on the
 	 * element itself.
@@ -192,6 +176,30 @@ namespace SinglePageFuzzer {
 	 */
 	export function createInput(): IEvent {
 		return { name: 'input', type: 'HTMLEvents' };
+	}
+
+	/**
+	 * Create a focus event for the eventDistribution
+	 * @return {IEvent} focus event
+	 */
+	export function createFocus(): IEvent {
+		return { name: 'focus', type: 'HTMLEvents' };
+	}
+
+	/**
+	 * Create a change event for the eventDistribution
+	 * @return {IEvent} change event
+	 */
+	export function createChange(): IEvent {
+		return { name: 'change', type: 'HTMLEvents' };
+	}
+
+	/**
+	 * Create a Blur event for the eventDistribution
+	 * @return {IEvent} Blur event
+	 */
+	export function createBlur(): IEvent {
+		return { name: 'blur', type: 'HTMLEvents' };
 	}
 
 	/**
@@ -299,6 +307,22 @@ namespace SinglePageFuzzer {
 	 */
 	export function createTouchcancel(): IEvent {
 		return { name: 'touchcancel', type: 'TouchEvent' };
+	}
+
+	/**
+	 * Create a click event for the eventDistribution
+	 * @return {IEvent} click event
+	 */
+	export function createClick(): IEvent {
+		return { name: 'click', type: 'MouseEvents' };
+	}
+
+	/**
+	 * Create a dblclick event for the eventDistribution
+	 * @return {IEvent} dblclick event
+	 */
+	export function createDblclick(): IEvent {
+		return { name: 'dblclick', type: 'MouseEvents' };
 	}
 
 	/**
@@ -641,9 +665,7 @@ namespace SinglePageFuzzer {
 
 				if (!this.hasDOMChanged) {
 					mutations.forEach((mutation: MutationRecord): void => {
-
 						// only register non hidden elements as dom mutations
-						/* tslint:disable:no-string-literal */
 						if (typeof mutation.target['offsetParent'] != 'undefined' && mutation.target['offsetParent'] !== null) {
 							this.hasDOMChanged = true;
 						}
@@ -784,25 +806,31 @@ namespace SinglePageFuzzer {
 
 				case 'MouseEvents':
 					event = document.createEvent('MouseEvents');
-					event['initMouseEvent'](
-						props.name,
-						true, // bubbles
-						props.name != 'mousemove', // cancelable
-						window, // view
-						0, // detail
-						x, //screenX
-						y, // screenY
-						x, // clientX
-						y, // clientY
-						// TODO: make special keys configurable
-						false, // ctrlKey
-						false, // altKey
-						false, // shiftKey
-						false, // metaKey
-						// TODO: make buttons configurabel
-						1, // button first: 1, second: 4, third: 2
-						document['body'].parentNode // relatedTarget
-					);
+
+					// click and dbl click use initEvents, the others use initMouseEvent
+					if (['click', 'dblclick'].indexOf(props.name) > -1) {
+						event.initEvent(props.name, true, true);
+					} else {
+						event['initMouseEvent'](
+							props.name,
+							true, // bubbles
+							props.name != 'mousemove', // cancelable
+							window, // view
+							0, // detail
+							x, // screenX
+							y, // screenY
+							x, // clientX
+							y, // clientY
+							// TODO: make special keys configurable
+							false, // ctrlKey
+							false, // altKey
+							false, // shiftKey
+							false, // metaKey
+							// TODO: make buttons configurabel
+							1, // button first: 1, second: 4, third: 2
+							document['body'].parentNode // relatedTarget
+						);
+					}
 					break;
 
 				case 'Events':

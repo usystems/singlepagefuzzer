@@ -38,22 +38,6 @@ var SinglePageFuzzer;
     }
     SinglePageFuzzer.createEventProbability = createEventProbability;
     /**
-     * Create a click event for the eventDistribution
-     * @return {IEvent} click event
-     */
-    function createClick() {
-        return { name: 'click', type: 'HTMLEvents' };
-    }
-    SinglePageFuzzer.createClick = createClick;
-    /**
-     * Create a dblclick event for the eventDistribution
-     * @return {IEvent} dblclick event
-     */
-    function createDblclick() {
-        return { name: 'dblclick', type: 'HTMLEvents' };
-    }
-    SinglePageFuzzer.createDblclick = createDblclick;
-    /**
      * Create a submit event for the eventDistribution. A submit can only be dispatched on a from element, so if
      * this.form is a HTMLFormElement, the submit event is dispatched on this.form else its dispatched on the
      * element itself.
@@ -71,6 +55,30 @@ var SinglePageFuzzer;
         return { name: 'input', type: 'HTMLEvents' };
     }
     SinglePageFuzzer.createInput = createInput;
+    /**
+     * Create a focus event for the eventDistribution
+     * @return {IEvent} focus event
+     */
+    function createFocus() {
+        return { name: 'focus', type: 'HTMLEvents' };
+    }
+    SinglePageFuzzer.createFocus = createFocus;
+    /**
+     * Create a change event for the eventDistribution
+     * @return {IEvent} change event
+     */
+    function createChange() {
+        return { name: 'change', type: 'HTMLEvents' };
+    }
+    SinglePageFuzzer.createChange = createChange;
+    /**
+     * Create a Blur event for the eventDistribution
+     * @return {IEvent} Blur event
+     */
+    function createBlur() {
+        return { name: 'blur', type: 'HTMLEvents' };
+    }
+    SinglePageFuzzer.createBlur = createBlur;
     /**
      * Create a keydown event for the eventDistribution
      * @param {number|number[]|()=>number} keyCodes key code the event ist called with. The following types can be
@@ -187,6 +195,22 @@ var SinglePageFuzzer;
         return { name: 'touchcancel', type: 'TouchEvent' };
     }
     SinglePageFuzzer.createTouchcancel = createTouchcancel;
+    /**
+     * Create a click event for the eventDistribution
+     * @return {IEvent} click event
+     */
+    function createClick() {
+        return { name: 'click', type: 'MouseEvents' };
+    }
+    SinglePageFuzzer.createClick = createClick;
+    /**
+     * Create a dblclick event for the eventDistribution
+     * @return {IEvent} dblclick event
+     */
+    function createDblclick() {
+        return { name: 'dblclick', type: 'MouseEvents' };
+    }
+    SinglePageFuzzer.createDblclick = createDblclick;
     /**
      * Create a mouseenter event for the eventDistribution
      * @return {IEvent} mouseenter event
@@ -318,18 +342,18 @@ var SinglePageFuzzer;
     var Context = (function () {
         function Context() {
         }
-        // active runner
-        Context.runner = null;
         return Context;
     }());
+    // active runner
+    Context.runner = null;
     /**
      * Runner
      */
     var Runner = (function () {
         // create a runner and directly start picking element
         function Runner(config) {
-            var _this = this;
             if (config === void 0) { config = {}; }
+            var _this = this;
             // minimal time used for actions with dom mutations
             this.minWithMutationTime = 0;
             // maximum time used for actions without dom mutations
@@ -395,7 +419,7 @@ var SinglePageFuzzer;
                 XMLHttpRequest.prototype.send = function () {
                     var args = [];
                     for (var _i = 0; _i < arguments.length; _i++) {
-                        args[_i - 0] = arguments[_i];
+                        args[_i] = arguments[_i];
                     }
                     sendProxy_1(this, args);
                 };
@@ -470,7 +494,6 @@ var SinglePageFuzzer;
                 if (!_this.hasDOMChanged) {
                     mutations.forEach(function (mutation) {
                         // only register non hidden elements as dom mutations
-                        /* tslint:disable:no-string-literal */
                         if (typeof mutation.target['offsetParent'] != 'undefined' && mutation.target['offsetParent'] !== null) {
                             _this.hasDOMChanged = true;
                         }
@@ -579,23 +602,29 @@ var SinglePageFuzzer;
                     break;
                 case 'MouseEvents':
                     event = document.createEvent('MouseEvents');
-                    event['initMouseEvent'](props.name, true, // bubbles
-                    props.name != 'mousemove', // cancelable
-                    window, // view
-                    0, // detail
-                    x, //screenX
-                    y, // screenY
-                    x, // clientX
-                    y, // clientY
-                    // TODO: make special keys configurable
-                    false, // ctrlKey
-                    false, // altKey
-                    false, // shiftKey
-                    false, // metaKey
-                    // TODO: make buttons configurabel
-                    1, // button first: 1, second: 4, third: 2
-                    document['body'].parentNode // relatedTarget
-                    );
+                    // click and dbl click use initEvents, the others use initMouseEvent
+                    if (['click', 'dblclick'].indexOf(props.name) > -1) {
+                        event.initEvent(props.name, true, true);
+                    }
+                    else {
+                        event['initMouseEvent'](props.name, true, // bubbles
+                        props.name != 'mousemove', // cancelable
+                        window, // view
+                        0, // detail
+                        x, // screenX
+                        y, // screenY
+                        x, // clientX
+                        y, // clientY
+                        // TODO: make special keys configurable
+                        false, // ctrlKey
+                        false, // altKey
+                        false, // shiftKey
+                        false, // metaKey
+                        // TODO: make buttons configurabel
+                        1, // button first: 1, second: 4, third: 2
+                        document['body'].parentNode // relatedTarget
+                        );
+                    }
                     break;
                 case 'Events':
                     var keyCode = null;
@@ -634,21 +663,20 @@ var SinglePageFuzzer;
             var elapsed = this.now() - this.lastAction;
             // if a dom mutation has occured, or some backround javascript is running, wait for another 20 ms
             if (elapsed >= 20 && elapsed < 25) {
-                // do not reduce the acceptance of the input fields
-                if (this.hasDOMChanged || this.activeElement.nodeName == 'INPUT') {
+                if (this.hasDOMChanged) {
                     // if the dispatch time is smaller than the minimal dispatch of mutated elements time, update it
                     if (this.minWithMutationTime == 0 || this.dispatchTime < this.minWithMutationTime) {
                         this.minWithMutationTime = this.dispatchTime;
                     }
                 }
-                else {
+                else if (this.activeElement.nodeName != 'INPUT') {
                     // if the dispatch time is bigger than the maximum dispatch time of non mutated elements, update it
                     if (this.dispatchTime > this.maxWithoutMutationTime) {
                         this.maxWithoutMutationTime = this.dispatchTime;
                     }
                 }
                 // if the time limit for dispatch times without mutations has changed, update it
-                var limit = Math.min(this.maxWithoutMutationTime, 0.8 * this.minWithMutationTime);
+                var limit = Math.min(0.8 * this.maxWithoutMutationTime, 0.5 * this.minWithMutationTime);
                 if (limit > this.withoutActionLimit) {
                     console.log("update without action limit to " + limit.toFixed(2) + " ms");
                     this.withoutActionLimit = limit;
@@ -689,10 +717,15 @@ var SinglePageFuzzer;
                 }
                 else if (typeof xhr.onreadystatechange === 'function') {
                     setTimeout(function () {
-                        xhr.status = 0;
+                        var cpy = {};
+                        // xhr.status and xhr.readyState are readonly, so make a copy, bo be able to change them
+                        Object.keys(xhr).forEach(function (key) {
+                            cpy[key] = xhr[key];
+                        });
+                        cpy.status = 0;
                         for (var i = 0; i < 5; i += 1) {
-                            xhr.readyState = i;
-                            xhr.onreadystatechange(null);
+                            cpy.readyState = i;
+                            cpy.onreadystatechange(null);
                         }
                     });
                 }
