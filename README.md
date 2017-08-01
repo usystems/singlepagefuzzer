@@ -2,18 +2,18 @@
 
 Single Page Fuzzer is a fast Fuzzer for single page webapps, including hybrind mobileapps. 
 
-##How does it work
+## How does it work
 
 The fuzzer selects a random dom element on your screen and dispatches an event from the passed event distribution to the
 selected dom element. To make debugging easyer, if a event invokes a javascript action, the fuzzer wait until it's
 finished until it dispatches the next event.
 
-##How to use
+## How to use
 
 The easyest way to start fuzzer, just run your configuration sniplet in the developer tools of your webbrowser. To catch
 potential errors you should turn on the switch catch all exceptions in the script panel.
 
-###Example Configuration for http://todomvc.com
+### Example Configuration for http://todomvc.com
 
 Here an example you can run on http://todomvc.com:
 
@@ -57,7 +57,7 @@ Here an example you can run on http://todomvc.com:
 })(document.createElement('script'));
 ```
 
-####Skeleton
+#### Skeleton
 
 We can use a trick to dynamically load the fuzzer code directly from github by creating a script element. The fuzzer 
 is started when the code is ready.
@@ -75,7 +75,7 @@ is started when the code is ready.
 })(document.createElement('script'));
 ```
 
-####Element filter
+#### Element filter
 
 Normally, there exist elements the fuzzer should not dispatch events on all elements, e.g elments with links to other
 pages, which would stop the fuzzer. In the example below e only allow elements which are descendants of the section tag.
@@ -92,7 +92,7 @@ selectFilter: function(x, y, el) {
 }
 ```
 
-####Events
+#### Events
 
 In the event distribution we can specify which events should be run on the selected dom element. The example below
 rans a click with 50% probatility, a doubleclick with 1% probability and so on. If several events are passed, several
@@ -159,7 +159,7 @@ A key code can be passed to the keyboard events. The following keycodes exits:
   * SinglePageFuzzer.INSERT = 45
   * SinglePageFuzzer.DELETE = 46
 
-####Request
+#### Request
 
 The fuzzer can modify the ajax requests sent to the server:
 
@@ -173,7 +173,7 @@ request: {
 }
 ```
 
-###Example Configuration for Angular-Touch
+### Example Configuration for Angular-Touch
 
 For Angular-Touch there are two specific points to concider:
 
@@ -203,7 +203,7 @@ For Angular-Touch there are two specific points to concider:
 })(document.createElement('script'));
 ```
 
-##How to stop
+## How to stop
 
 To top the fuzzer, run the following code in the developer tools of your webbrowser:
 
@@ -211,7 +211,7 @@ To top the fuzzer, run the following code in the developer tools of your webbrow
 setTimeout(function() { SinglePageFuzzer.stop() }, 5000)
 ```
 
-##Supported Browser
+## Supported Browser
 Current versions fo the following browsers are supported
 
   * Chrome
